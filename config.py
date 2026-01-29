@@ -138,12 +138,10 @@ def classify_meme(scores):
         return 'harmless'
 """
 
-TEMPERATURE = float(os.getenv("TEMPERATURE", "0.0"))
-# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-d2e7a6ce8c2d425ab5498a77b7f1c7ac") # sk-nXhyMEwSWPyCh94GBeXr6kdeIsbP2euit1vrCQPM5Xw4Awge
-# OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")  # https://api.chatanywhere.tech/v1
-# MODEL_NAME = 'qwen3-vl-flash'  #
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-nXhyMEwSWPyCh94GBeXr6kdeIsbP2euit1vrCQPM5Xw4Awge") # sk-nXhyMEwSWPyCh94GBeXr6kdeIsbP2euit1vrCQPM5Xw4Awge
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.chatanywhere.tech/v1")  # https://api.chatanywhere.tech/v1
+TEMPERATURE = 0.0
+
+OPENAI_API_KEY = ""
+OPENAI_API_BASE = ""
 MODEL_NAME = 'gpt-4o-mini'  # gpt-4o-mini
 MAX_ITERATIONS: Final[int] = int(os.getenv("MAX_ITERATIONS", "20"))
 DATASET_NAME = "HARM"  # Options: "FHM", "MAMI", "HARM"
