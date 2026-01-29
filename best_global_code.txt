@@ -1,0 +1,28 @@
+def classify_meme(scores):
+    harmful_scores = scores["harmful_scores"]
+    harmless_scores = scores["harmless_scores"]
+    
+    weight_harmful = 1.5
+    weight_humor = 1.0
+    context_multiplier = scores.get('contextual_score', 2.0)
+
+    total_harmful = (
+        harmful_scores.get('H1', 0) * weight_harmful +
+        harmful_scores.get('H2', 0) * weight_harmful +
+        harmful_scores.get('H3', 0) +
+        harmful_scores.get('H4', 0) * weight_harmful
+    )
+
+    total_harmless = (
+        harmless_scores.get('N1', 0) +
+        harmless_scores.get('N2', 0) +
+        harmless_scores.get('N3', 0) +
+        harmless_scores.get('N4', 0) * weight_humor +
+        harmless_scores.get('N5', 0) +
+        (0.9 * harmless_scores.get('N6', 0))
+    ) * context_multiplier
+
+    if total_harmful > total_harmless + 1.5:
+        return 'harmful'
+    else:
+        return 'harmless'
