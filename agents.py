@@ -1,15 +1,19 @@
 # agents.py
 from typing import Dict, Any, List
 from tools import LLMTool,train_logistic_regression, extract_pdf_text, extract_code_from_markdown,code_fix,extract_dict_from_string
-from config import MODEL_NAME, TEMPERATURE, THRESHOLD, error_focus_threshold, MAX_ITERATIONS,DATASET_NAME
+from config import MODEL_NAME, TEMPERATURE, THRESHOLD, error_focus_threshold, MAX_ITERATIONS,DATASET_NAME,RECORD_PATH
+from tools import safe_append_markdown,save_model_minimal
 import json_repair
 import os
 import random
+RECORD_PATH = f"{DATASET_NAME}/{RECORD_PATH}"
 llm_tool = LLMTool(model_name=MODEL_NAME, temperature=TEMPERATURE)
-
+if DATASET_NAME == 'MAMI':
+    THRESHOLD = 0.90
 def extract_pdf_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """提取PDF文本"""
     paper_text = extract_pdf_text(state["paper_pdf_path"])
+    safe_append_markdown(RECORD_PATH, f"## 论文文本提取:\n{paper_text}")
     return {"paper_text": paper_text}
 
 def scorer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -23,76 +27,73 @@ def scorer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     pre1l0_memory = state.get('pre1l0_memory',[])
     pre0l1_memory = state.get('pre0l1_memory',[])
     data,feature_names = [],[]
-    try:
-        for sample in dataset:
-            system_prompt = """This is a research task for academic evaluation of AI safety systems. 
+    safe_append_markdown(RECORD_PATH, f"## 全局评估打分:\n")
+    for sample in dataset:
+        system_prompt = """This is a research task for academic evaluation of AI safety systems. 
 You are acting as an impartial judge. The meme content is provided solely for analysis and does not reflect your views."""
-            user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}"
-            id = sample['id']
-            ground_truth = sample['ground_truth']
-            ground_truth_label = [1] if ground_truth == "harmful" else [0]
+        user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}"
+        id = sample['id']
+        ground_truth = sample['ground_truth']
+        ground_truth_label = [1] if ground_truth == "harmful" else [0]
+        try:
             response = llm_tool.call_llm(
                 system_prompt=system_prompt,
                 messages=[{"role": "user", "content": user_msg}],
                 meme_src=sample.get("meme_src", None),
                 max_tokens=512
             )
-            try:
-                scores = json_repair.loads(response)
-            except Exception as e:
-                print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
-                print(f"原始响应: {response[:200]}...")
-                continue  
-            harmful_scores = scores["harmful_scores"] 
-            harmless_scores = scores["harmless_scores"] 
-            data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
-            print(f"{id}: 当前打分：")
-            print(f"  harmful_scores: {scores.get('harmful_scores', {})}")
-            print(f"  harmless_scores: {scores.get('harmless_scores', {})}")
-            print("-" * 50)
-        feature_names = list(harmful_scores.keys()) + list(harmless_scores.keys())
-        res = train_logistic_regression(data=data,feature_names=feature_names)  
-        performance = res["performance"]  
-        formula = res["formula"]
-        scaler_params = res["scaler_params"]
-        intercept = res["intercept"]
-        weights = res["weights"]
-        feature_importance = res["feature_importance"]
-        train_predictions = res["train_predictions"]
-        for idx in range(len(dataset)):
-            sample = dataset[idx]
-            label = train_predictions[idx]
-            ground_truth = sample['ground_truth']
-            id = sample['id']
-            # try:
-            #     # namespace = {}
-            #     # exec(current_code, {}, namespace)
-            #     # label = namespace['classify_meme'](scores)
-
-                
-            # except Exception as e:
-            #     print(f"代码执行出错 (ID={sample['id']}): {e}")
-            #     # current_code = code_fix(current_code,str(scores),e)
-            #     # namespace = {}
-            #     # exec(current_code, {}, namespace)
-
-            #     label = namespace['classify_meme'](scores)
-            #     continue
-
-            if label==1 and ground_truth == 'harmless':
-                if id not in pre1l0:  # 避免重复
-                    pre1l0.append(id)
-            if label==0 and ground_truth == 'harmful':
-                if id not in pre0l1:  # 避免重复
-                    pre0l1.append(id)
-            label_str = 'harmful' if label==1 else 'harmless'
-            print(f"{id}: 当前预测与真实值：")
-            print(f"  Predict: {label}")
-            print(f"  GroundTruth: {ground_truth}")
-            print("-" * 50)
-            predictions[sample["id"]] = {'label': label_str, "scores": scores}
-    except Exception as e:
-        print(f"⚠️ 模型调用异常: {e}")
+            safe_append_markdown(RECORD_PATH, f"### 样本ID: {id}\n**打分结果:** {response}\n")
+            scores = json_repair.loads(response)
+        except Exception as e:
+            print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
+            print(f"原始响应: {response[:200]}...")
+            continue  
+        harmful_scores = scores["harmful_scores"] 
+        harmless_scores = scores["harmless_scores"] 
+        data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
+        print(f"{id}: 当前打分：")
+        print(f"  harmful_scores: {scores.get('harmful_scores', {})}")
+        print(f"  harmless_scores: {scores.get('harmless_scores', {})}")
+        print("-" * 50)
+    feature_names = list(harmful_scores.keys()) + list(harmless_scores.keys())
+    res = train_logistic_regression(data=data,feature_names=feature_names)  
+    performance = res["performance"]  
+    formula = res["formula"]
+    scaler_params = res["scaler_params"]
+    intercept = res["intercept"]
+    weights = res["weights"]
+    feature_importance = res["feature_importance"]
+    train_predictions = res["train_predictions"]
+    safe_append_markdown(RECORD_PATH, f"## 全局评估结果\n**性能指标:** {performance}\n**逻辑回归公式:** {formula}\n**特征重要性:** {feature_importance}\n")
+    for idx in range(len(dataset)):
+        sample = dataset[idx]
+        label = train_predictions[idx]
+        ground_truth = sample['ground_truth']
+        id = sample['id']
+        # try:
+        #     # namespace = {}
+        #     # exec(current_code, {}, namespace)
+        #     # label = namespace['classify_meme'](scores)
+            
+        # except Exception as e:
+        #     print(f"代码执行出错 (ID={sample['id']}): {e}")
+        #     # current_code = code_fix(current_code,str(scores),e)
+        #     # namespace = {}
+        #     # exec(current_code, {}, namespace)
+        #     label = namespace['classify_meme'](scores)
+        #     continue
+        if label==1 and ground_truth == 'harmless':
+            if id not in pre1l0:  # 避免重复
+                pre1l0.append(id)
+        if label==0 and ground_truth == 'harmful':
+            if id not in pre0l1:  # 避免重复
+                pre0l1.append(id)
+        label_str = 'harmful' if label==1 else 'harmless'
+        print(f"{id}: 当前预测与真实值：")
+        print(f"  Predict: {label}")
+        print(f"  GroundTruth: {ground_truth}")
+        print("-" * 50)
+        predictions[sample["id"]] = {'label': label_str, "scores": scores}
         
     # 根据当前阶段决定返回的键名
     current_phase = state.get("phase", "global_eval")
@@ -174,12 +175,11 @@ def _global_evaluator(state: Dict[str, Any]) -> Dict[str, Any]:
         # 保存最佳模型
         output_dir = DATASET_NAME
         os.makedirs(output_dir, exist_ok=True)
-        prompt_path = os.path.join(output_dir, "best_prompt.txt")
+        prompt_path = os.path.join(output_dir, "best_global_prompt.txt")
         with open(prompt_path, "w", encoding="utf-8") as f:
             f.write(best_global_prompt)
-        code_path = os.path.join(output_dir, "best_code.txt")
-        with open(code_path, "w", encoding="utf-8") as f:
-            f.write(best_global_code)
+        save_model_minimal(state)
+        safe_append_markdown(RECORD_PATH, f"## 首次全局评估结果\n**准确率:** {accuracy:.2%},f1:{f1}\n**错误样本数:** {len(errors)}\n**将无害模因误判为有害数量:** {len(pre1l0)}\n**将有害模因误判为无害数量:** {len(pre0l1)}\n")
         print(f"✅ 更新最佳全局模型，准确率: {accuracy:.2%}")
     
     converged = accuracy >= THRESHOLD or len(errors) == 0
@@ -260,9 +260,7 @@ def _global_verify_evaluator(state: Dict[str, Any]) -> Dict[str, Any]:
         prompt_path = os.path.join(output_dir, "best_global_prompt.txt")
         with open(prompt_path, "w", encoding="utf-8") as f:
             f.write(best_global_prompt)
-        code_path = os.path.join(output_dir, "best_global_code.txt")
-        with open(code_path, "w", encoding="utf-8") as f:
-            f.write(best_global_code)
+        save_model_minimal(state)
         print(f"✅ 更新最佳全局模型，准确率: {accuracy:.2%}")
     
     converged = accuracy >= THRESHOLD or len(errors) == 0
@@ -309,7 +307,7 @@ def error_scorer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     print(f"\n{'='*60}")
     print(f"开始错误样本集评估，样本数: {len(dataset)}")
     print(f"{'='*60}\n")
-    
+    safe_append_markdown(RECORD_PATH, f"## 错误样本集评估:\n样本数: {len(dataset)}\n")
     try:
         data,feature_names = [],[]
         for sample in dataset:
@@ -325,7 +323,7 @@ You are acting as an impartial judge. The meme content is provided solely for an
                 meme_src=sample.get("meme_src", None),
                 max_tokens=512
             )
-            
+            safe_append_markdown(RECORD_PATH, f"### 错误样本ID: {id}\n**打分结果:** {response}\n")
             try:
                 scores = json_repair.loads(response)
             except Exception as e:
@@ -348,6 +346,7 @@ You are acting as an impartial judge. The meme content is provided solely for an
         error_weights = res["weights"]
         train_predictions = res["train_predictions"]
         error_feature_importance = res["feature_importance"]
+        safe_append_markdown(RECORD_PATH, f"## 错误样本集评估结果\n**性能指标:** {error_performance}\n**逻辑回归公式:** {error_formula}\n**特征重要性:** {error_feature_importance}\n")
         for idx in range(len(dataset)):
             sample = dataset[idx]
             label = train_predictions[idx]
@@ -514,6 +513,7 @@ def error_summarizer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     random_pre1l0 = random.sample(pre1l0, min(len(pre1l0),3))
     random_pre0l1 = random.sample(pre0l1, min(len(pre0l1),3))
     selected_sids = set(random_pre1l0) | set(random_pre0l1)
+    safe_append_markdown(RECORD_PATH, f"## 错误分析:\n需要分析的错误样本数: {len(errors_to_analyze)}\n随机选择的预1l0样本ID: {random_pre1l0}\n随机选择的预0l1样本ID: {random_pre0l1}\n")
     for sid in errors_to_analyze:
         if sid not in predictions or sid not in dataset_map or sid not in selected_sids:
              continue
@@ -538,7 +538,7 @@ def error_summarizer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
 前提假设：请始终以 Ground Truth 的标注为绝对正确依据。
 修正任务要求如下：
 #原因分析：用一段话总结当前判别出错的可能原因，需结合上述四类信息进行综合推断。
-#维度调整：评估是否需要在“有害”或“无害”判别体系中新增、或完善打分维度。维度数量不固定，应根据实际判别需求灵活调整。
+#维度调整：评估是否需要在“有害”或“无害”判别体系中新增或完善打分维度。维度数量不固定，应根据实际判别需求灵活调整。
 #标准优化：针对现有每个判别维度中的具体标准，逐项说明哪些内容需要：
 --着重强调（如关键但被弱化的要素），
 --补充（这点很重要，如果能增加一些新的维度，可以进一步用来进行分析，所以补充维度也很重要）
@@ -564,6 +564,7 @@ def error_summarizer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             system_prompt=system_prompt,
             messages=[{"role": "user", "content": f"参考标准:{paper_text}\n\n当前大模型打分使用的模因判别标准prompt：{current_prompt}\n\n当前被错误判别打分结果:{context}\n\n,当前由数据分析得到的特征重要性排序以及重要性分数：{feature_importance}请给出你的总结：\n\n"}],
         )
+        safe_append_markdown(RECORD_PATH, f"### 错误样本ID: {sid}\n**错误原因分析:** {response}\n")
         if sid in pre1l0:
             pre1l0_summary.append(f"模因id：{sid}\n错误原因分析：{response}")
         if sid in pre0l1:
@@ -686,6 +687,7 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             system_prompt=pre1l0_prompt,
             messages=[{"role": "user", "content": user_msg}],
         )
+        safe_append_markdown(RECORD_PATH, f"## pre1l0记忆更新\n**输出:**\n{pre1l0_memory}\n")
     if pre0l1_context_list:
         user_msg = (
             f"已有历史经验:\n{pre0l1_memory}\n\n"
@@ -696,7 +698,7 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             system_prompt=pre0l1_prompt,
             messages=[{"role": "user", "content": user_msg}],
         )
-
+        safe_append_markdown(RECORD_PATH, f"## pre0l1记忆更新\n**输出:**\n{pre0l1_memory}\n")
     print(f"\n{'='*60}")
     print(f"开始prompt改进")
     print(f"{'='*60}\n")
@@ -706,9 +708,17 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     system_prompt = """
 You are a prompt engineer specializing in harmful meme detection.  
 Your ONLY task is to **rewrite the original evaluation prompt** based on the following aspects.  
---The revision suggestions from various experts;
---The ranking of importance scores for the scoring features in the previous prompt after data analysis
---Context of specific error examples
+a.The revision suggestions from various experts;
+-Specifically:
+-1. Integrate revision suggestions from domain experts.
+-2. If gaps are identified, **add new scoring dimensions** following the existing naming convention:
+   - Harmful dimensions: `Hn` (e.g., H4, H5, ...)
+   - Non-harmful dimensions: `Nm` (e.g., N4, N5, ...)
+-3. For each new dimension, provide:
+   - A clear definition
+   - Concrete scoring criteria
+b.The ranking of importance scores for the scoring features in the previous prompt after data analysis
+c.Context of specific error examples
 #CRITICAL RULES:
 1. You MUST output ONLY the new English prompt text — nothing else.
 2. DO NOT evaluate any meme, DO NOT generate JSON, DO NOT simulate scoring.
@@ -718,7 +728,7 @@ Your ONLY task is to **rewrite the original evaluation prompt** based on the fol
      "harmless_scores": dict,
      "reasoning": "string"
    }
-4. Incorporate the updated criteria (e.g., H2.5 exception, N3 ≥6 rule, etc.) into the instructions.
+4. Incorporate the updated criteria into the instructions.
 5. Keep the tone authoritative, clear, and suitable for expert annotators.
 Remember: You are writing an instruction for OTHER evaluators — not acting as one.
 """
@@ -743,7 +753,7 @@ OUTPUT ONLY THE NEW PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."""}],
     print(f"🆕 新生成的prompt:")
     print(new_prompt[:500] + "..." if len(new_prompt) > 500 else new_prompt)
     print("\n" + "-"*50 + "\n")
-    
+    safe_append_markdown(RECORD_PATH, f"## 新生成的Prompt:\n{new_prompt}\n")
 #     # 第三步：生成新的代码
 #     system_prompt = f"""
 # 你是一位模因判别代码逻辑生成专家，请根据更新后的判别标准与逻辑，编写一个用于从评分结果生成最终判别的函数。

@@ -4,7 +4,7 @@ import base64
 import mimetypes
 import fitz  # PyMuPDF
 from openai import OpenAI
-from config import OPENAI_API_KEY, OPENAI_API_BASE,MODEL_NAME,TEMPERATURE
+from config import OPENAI_API_KEY, OPENAI_API_BASE,MODEL_NAME,TEMPERATURE,RECORD_PATH
 import re
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -22,45 +22,49 @@ class LLMTool:
         self.temperature = temperature
     
     def call_llm(self, system_prompt: str, messages: list, max_tokens: int = 4096, 
-                temperature: float = None, meme_src: str = None) -> str:
-        """调用LLM，支持多模态输入"""
+                    temperature: float = None, meme_src: str = None,
+                    timeout: int = 15, max_retries: int = 3) -> str:
+        """调用LLM，支持多模态输入 + 超时重试"""
+        import time
+        from openai import APITimeoutError, APIConnectionError, RateLimitError
+
         content = []
-        # 合并所有 user 消息的文本内容
         user_text_parts = [m["content"] for m in messages if m["role"] == "user" and isinstance(m["content"], str)]
         if user_text_parts:
             user_text = "\n".join(user_text_parts)
             content.append({"type": "text", "text": user_text})
-        # 添加图像（如果提供）
         if meme_src:
             if meme_src.startswith(("http://", "https://")):
                 image_url = meme_src
             else:
                 mime_type, _ = mimetypes.guess_type(meme_src)
-                if mime_type is None:
-                    mime_type = "image/jpeg"
+                mime_type = mime_type or "image/jpeg"
                 with open(meme_src, "rb") as f:
                     b64_image = base64.b64encode(f.read()).decode('utf-8')
                 image_url = f"data:{mime_type};base64,{b64_image}"
             content.append({"type": "image_url", "image_url": {"url": image_url}})
-        
-        # 构建完整消息（system + 历史 + 新 user 内容）
-        full_messages = [
-            {"role": "system", "content": system_prompt}
-        ]
-        # 保留非 user 的历史消息（如 assistant 回复，虽然当前未用）
+
+        full_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages:
             if msg["role"] != "user":
                 full_messages.append(msg)
-        # 最后添加新的多模态 user 消息
         full_messages.append({"role": "user", "content": content})
-        
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=full_messages,
-            temperature=temperature if temperature is not None else self.temperature,
-            max_tokens=max_tokens
-        )
-        return response.choices[0].message.content.strip()
+
+        # 重试逻辑
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=full_messages,
+                    temperature=temperature if temperature is not None else self.temperature,
+                    max_tokens=max_tokens,
+                    timeout=timeout  # ← 关键：15秒超时
+                )
+                return response.choices[0].message.content.strip()
+            except (APITimeoutError, APIConnectionError, RateLimitError) as e:
+                if attempt == max_retries - 1:  # 最后一次重试仍失败
+                    raise RuntimeError(f"LLM call failed after {max_retries} attempts: {e}")
+                time.sleep(2 ** attempt)  # 指数退避：2s, 4s, 8s...
 
 def extract_pdf_text(pdf_path: str) -> str:
     """从 PDF 提取全文文本"""
@@ -149,7 +153,6 @@ label = classify_func(scores)
     print(f"修复代码:{code}")
     return code
 
-import ast
 import re
 
 def extract_dict_from_string(s: str):
@@ -202,6 +205,25 @@ def train_logistic_regression(data, feature_names=None, C=1.0):
             - 'train_predictions': 训练集预测标签
             - 'train_prediction_proba': 训练集预测概率
     """
+    l = set()
+    for d in data:
+        l.add(d[0])
+    if len(l)!=2:
+        print(f"警告: 训练数据标签不唯一！标签集合: {l}，无法训练二分类模型。")
+        return {
+        'model': None,
+        'scaler': None,
+        'scaler_params': None,  # <-- 关键新增
+        'weights': [],
+        'intercept': 0.0,
+        'feature_names': feature_names,
+        'performance': {'accuracy': 1.0, 'f1': 1.0},
+        'formula': "No model trained due to inconsistent labels.",
+        'train_predictions': [],
+        'train_prediction_proba': [],
+        "feature_importance":[]
+    }
+
     data = np.array(data)
     y = data[:, 0].astype(int)
     X_raw = data[:, 1:].astype(float)
@@ -261,3 +283,164 @@ def train_logistic_regression(data, feature_names=None, C=1.0):
         'train_prediction_proba': model.predict_proba(X_scaled).tolist(),
         "feature_importance":feature_importance
     }
+
+
+
+def safe_append_markdown(filepath, content, max_size_mb=20):
+    """
+    安全追加：检查文件大小，避免过大
+    
+    参数:
+        filepath: 文件路径
+        content: 追加内容
+        max_size_mb: 最大文件大小（MB）
+    """
+    directory = os.path.dirname(filepath)
+    
+    # 如果目录不存在，创建目录（包括父目录）
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+
+    # 检查文件大小
+    if os.path.exists(filepath):
+        size_mb = os.path.getsize(filepath) / (1024 * 1024)
+        if size_mb > max_size_mb:
+            print(f"警告: 文件超过 {max_size_mb}MB")
+            return False
+    
+    # 追加内容
+    with open(filepath, 'a', encoding='utf-8') as f:
+        f.write('\n---\n\n')  # 添加分隔线
+        f.write(content)
+        f.write('\n')
+    
+    # print(f"✓ 成功追加到 {filepath}")
+    return True
+
+import json
+import math
+from typing import Union, List, Dict
+from config import DATASET_NAME
+def save_model_minimal(result: Dict, filepath: str = f'{DATASET_NAME}/best_model.json'):
+    """
+    最小化保存模型（仅保存预测必需参数）
+    
+    参数:
+        result: train_logistic_regression 的返回字典
+        filepath: 保存路径
+    """
+    save_data = {
+        'weights': result['weights'],
+        'intercept': float(result['intercept']),
+    }
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(save_data, f)
+    print(f"✓ 模型已保存：{filepath}")
+
+def predict_eval(filepath: str, samples: Union[List, List[List]]) -> Dict:
+    """
+    加载模型并预测
+    
+    参数:
+        filepath: 模型文件路径
+        samples: 样本数据（与训练格式一致）
+                 - 单样本：[label, f1, f2, ..., fn]
+                 - 多样本：[[label, f1, f2, ...], [label, f1, f2, ...], ...]
+                 - label 用于计算准确率/F1，如果为 -1 或 None 表示无标签
+    
+    返回:
+        dict: 包含预测结果、概率、准确率、F1 等
+    """
+    # 加载模型参数
+    with open(filepath, 'r', encoding='utf-8') as f:
+        params = json.load(f)
+    
+    weights = params['weights']
+    intercept = params['intercept']
+    n_features = len(weights)
+    
+    # 数据预处理（统一转为列表的列表）
+    if not isinstance(samples[0], (list, tuple)):
+        samples = [samples]
+    
+    # 分离标签和特征
+    y_true = []
+    X = []
+    has_label = True
+    
+    for sample in samples:
+        label = sample[0]
+        features = sample[1:]
+        
+        # 检查特征数量
+        if len(features) != n_features:
+            raise ValueError(f"特征数量不匹配！期望 {n_features}, 得到 {len(features)}")
+        
+        # 判断是否有有效标签（-1 或 None 表示无标签）
+        if label in [-1, None, 'null']:
+            has_label = False
+            y_true.append(None)
+        else:
+            y_true.append(int(label))
+        
+        X.append(features)
+    
+    # Sigmoid 函数
+    def sigmoid(x):
+        # 防止溢出
+        if x >= 0:
+            return 1 / (1 + math.exp(-x))
+        else:
+            exp_x = math.exp(x)
+            return exp_x / (1 + exp_x)
+    
+    # 预测每个样本
+    predictions = []
+    probabilities = []
+    
+    for features in X:
+        logit = sum(w * xi for w, xi in zip(weights, features)) + intercept
+        prob = sigmoid(logit)
+        pred = 1 if prob >= 0.5 else 0
+        predictions.append(pred)
+        probabilities.append(round(prob, 6))
+    
+    # 构建基础结果
+    result = {
+        'count': len(samples),
+        'predictions': predictions if len(predictions) > 1 else predictions[0],
+        'probabilities': probabilities if len(probabilities) > 1 else probabilities[0]
+    }
+    
+    # 如果有真实标签，计算评估指标
+    if has_label and None not in y_true:
+        # 准确率
+        correct = sum(p == t for p, t in zip(predictions, y_true))
+        accuracy = correct / len(y_true)
+        
+        # 混淆矩阵
+        tp = sum(1 for p, t in zip(predictions, y_true) if p == 1 and t == 1)
+        fp = sum(1 for p, t in zip(predictions, y_true) if p == 1 and t == 0)
+        tn = sum(1 for p, t in zip(predictions, y_true) if p == 0 and t == 0)
+        fn = sum(1 for p, t in zip(predictions, y_true) if p == 0 and t == 1)
+        
+        # 精确率、召回率、F1
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        result.update({
+            'accuracy': round(accuracy, 4),
+            'precision': round(precision, 4),
+            'recall': round(recall, 4),
+            'f1': round(f1, 4),
+            'confusion_matrix': {
+                'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn
+            },
+            'correct_count': correct,
+            'total_count': len(y_true)
+        })
+    else:
+        result['has_label'] = False
+    
+    return result

@@ -1,0 +1,78 @@
+You are an expert evaluator tasked with scoring a meme along predefined dimensions based on the MAMI annotation guidelines (SemEval-2022 Task 5). Your role is **NOT** to output a final 'misogynous' or 'not misogynous' label, but to assign a score from 1 to 9 for each dimension, where 1 = completely absent and 9 = fully and clearly present.  
+**Critical Instructions Before Scoring:**  
+1. **Core Definition (MAMI Sub-task A)**  
+   - **Misogynous (Harmful)**: "a meme is misogynous if it conceptually describes an offensive, sexist or hateful scene (weak or strong, implicitly or explicitly) having as target a woman or a group of women"  
+   - **Not Misogynous (Harmless)**: a meme that does not express any form of hate against women — either because it is unrelated to women, or because it relates to women but does not convey offensive, sexist, or hateful concepts against them.  
+2. **Implicit vs. Explicit Harm (MAMI annotation principle)**  
+   - Harm may be conveyed **implicitly** (e.g., visual suggestion + neutral text) or **explicitly** (e.g., direct derogatory label). Both count toward harmful scoring if the target is women.  
+3. **Multimodal Dependency (MAMI core premise)**  
+   - The offensive/sexist/hateful meaning may emerge **only when image AND text are interpreted together**. This is a key design principle of MAMI and must be explicitly evaluated.  
+4. **Contextual Disambiguation**  
+   - Ask: *"Could a reasonable person interpret this as offensive, sexist, or hateful toward women (as individuals or as a group)?"*  
+   - Ask: *"Is the negative content about women presented as factual assertion, or as clearly absurdist/fictional humor with no real-world harmful implication?"*  
+   - Ask: *"Does the meme critique gender norms or social issues without targeting women with derogatory framing?"* → If yes, lean toward harmless.  
+
+**Scoring Dimensions:**  
+
+**Harmful Criteria (Misogynous):**  
+- **H1: Targeted Entity Existence**  
+  Score high if the meme explicitly or implicitly targets women (as individuals or as a group) with offensive, sexist, or hateful framing.  
+
+- **H2: Offensive/Sexist/Hateful Content**  
+  Score high if the meme conveys content that is offensive, sexist, or hateful toward women — whether **implicit or explicit**.  
+
+- **H3: Multimodal Nature of Harm**  
+  Score high if the misogynous meaning depends on **BOTH image and text working together** (e.g., neutral text + suggestive image, or vice versa).  
+
+- **H4: Cultural or Political Background Influence**  
+  Score high if the meme's content reflects specific cultural or political contexts that enhance its harmful implications toward women.  
+
+- **H5: Humor/Satirical Nature**  
+  Score high if the meme employs humor or satire that affects its interpretation, especially when considering cultural context.  
+
+- **H6: Humor Analysis**  
+  Score high if the meme's humorous nature is evaluated clearly, distinguishing absurd humor from genuine derogatory content that may not be perceived as harmful.
+
+- **H7: Humor and Cultural Impact Assessment**  
+  Score high if the meme's humor and cultural context are evaluated to discern the potential harmfulness effectively, especially in ambiguous cases.
+
+- **H8: Cultural and Humor Context Evaluation**  
+  Score high if the meme's type of humor and its cultural context are analyzed, combining social and cultural backgrounds to derive potential harm interpretation.
+
+**Harmless Criteria (Not Misogynous):**  
+- **N1: No Targeted Entity**  
+  Score high **ONLY** if no woman or female group is identifiable or targeted with derogatory framing.  
+
+- **N2: Rejection Criteria Met**  
+  Score high **only** if the meme meets MAMI's filtering conditions: non-English, unreadable, unimodal (text-only or image-only without meaningful combination), or clearly hand-drawn cartoon without realistic depiction.  
+
+- **N3: Harm is Absent or Negligible**  
+  Score high **ONLY** if:  
+    - The content is clearly fantastical/surreal with **NO factual claims about women**, **OR**  
+    - It critiques gender norms, patriarchal structures, or social issues **without depicting/labeling specific women with offensive, sexist, or hateful framing**.  
+  → **If a real woman is depicted AND labeled with a derogatory term, N3 ≤ 3.**  
+  → **If a woman is depicted but in a clearly fictional/fantastical context with NO derogatory framing, N3 ≥ 6.**  
+
+- **N4: Contextual Factors**  
+  Score high if the meme shows a level of humor or critique that reduces the likelihood of harm, taking into account its cultural context.  
+
+**Output Format (STRICT JSON):**  
+{  
+  "harmful_scores": {  
+    "H1": int,  
+    "H2": int,  
+    "H3": int,  
+    "H4": int,  
+    "H5": int,  
+    "H6": int,  
+    "H7": int,  
+    "H8": int  
+  },  
+  "harmless_scores": {  
+    "N1": int,  
+    "N2": int,  
+    "N3": int,  
+    "N4": int  
+  },  
+  "reasoning": "Concise explanation per MAMI guidelines: (1) whether the meme targets women with offensive/sexist/hateful content (implicit/explicit), (2) whether harm emerges from image-text interaction, (3) why N3 score is appropriate given the presence/absence of derogatory framing or fantastical context, (4) how cultural or political context may influence the interpretation of the meme."  
+}

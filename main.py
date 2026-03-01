@@ -2,23 +2,24 @@ from graph import app
 from state import MemeSample, AgentState
 import json
 import os
-from config import DATASET_NAME,TASK_FHM_J_H,TASK_HARM_J_H,JUDGE_SCORE,DATASET_NUM,error_focus_threshold
+from config import DATASET_NAME,TASK_FHM_J_H,TASK_HARM_J_H,TASK_MAMI_J_H,JUDGE_SCORE,DATASET_NUM,error_focus_threshold
 import random
 import pandas as pd
-seed =  32  #46 95%  54 90%
+seed =  46  #46 95%  54 90%
 random.seed(seed)
-local_path = 'C:/Users/77366/Desktop/模因检测/few-shot模因检测/基于多智能体对抗辩论的零样本有害模因检测/code/DTD/'
+local_path = 'C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/'
 if DATASET_NAME=="FHM":
-    data_src = 'data/FHM/data/dev_with_description_copy.jsonl'
+    data_src = 'data/FHM/data/train.jsonl'
     img_src = 'data/FHM/data'
     paper_path = 'data/FHM/paper.pdf'
     initial_prompt = TASK_FHM_J_H
 elif DATASET_NAME=="MAMI":
-    data_src = 'data/MAMI/data/test_with_description.tsv'
-    img_src = 'data/MAMI/data/test_images'
+    data_src = 'data/MAMI/data/train.tsv'
+    img_src = 'data/MAMI/data/training_images'
     paper_path = 'data/MAMI/paper.pdf'
+    initial_prompt = TASK_MAMI_J_H
 elif DATASET_NAME=="HARM":
-    data_src = 'data/HARM/test_with_description_copy.jsonl'
+    data_src = 'data/HARM/train.jsonl'
     img_src = 'data/HARM/images'
     paper_path = 'data/HARM/paper.pdf'
     initial_prompt = TASK_HARM_J_H
@@ -35,7 +36,7 @@ if DATASET_NAME == 'FHM':
     for s in sampled_lines:
         sample = json.loads(s)
         dataset.append({
-        'id':sample[id],
+        'id':sample["id"],
         "meme_src": f"{img_src}/{sample['img']}",       # 本地图像路径
         "meme_text": sample['text'],
         "meme_content": sample.get('description', ""),
