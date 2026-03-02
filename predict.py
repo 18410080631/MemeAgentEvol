@@ -13,9 +13,11 @@ import numpy as np
 llm_tool = LLMTool(model_name=MODEL_NAME, temperature=TEMPERATURE)
 seed =  54  
 random.seed(seed)
+DATASET_NAME = "HARM"
+
 local_path = 'C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/'
 if DATASET_NAME=="FHM":
-    data_src = 'data/FHM/data/dev.jsonl'
+    data_src = 'data/FHM/data/dev_with_description_copy.jsonl'
     img_src = 'data/FHM/data'
     paper_path = 'data/FHM/paper.pdf'
     initial_prompt = TASK_FHM_J_H
@@ -24,7 +26,7 @@ elif DATASET_NAME=="MAMI":
     img_src = 'data/MAMI/data/test_images'
     paper_path = 'data/MAMI/paper.pdf'
 elif DATASET_NAME=="HARM":
-    data_src = 'data/HARM/test_with_description_copy.jsonl'
+    data_src = 'data/HARM/test.jsonl'
     img_src = 'data/HARM/images'
     paper_path = 'data/HARM/paper.pdf'
     initial_prompt = TASK_HARM_J_H
@@ -119,6 +121,7 @@ def calculate_metrics(dataset_name, harmful_nums, harmless_nums,b):
     data_src = os.path.join(dataset_name+"_final", "predictions.json")
     with open(data_src, "r", encoding="utf-8") as f:
         predictions = json.load(f)
+    print(len(predictions))
     y_true = [] # 真实标签
     y_pred = [] # 预测标签
     for d in predictions:
@@ -173,8 +176,75 @@ def find_best_b(dataset_name, harmful_nums, harmless_nums):
 # print(f"Accuracy: {results['accuracy']:.4f}")
 # print(f"Macro-F1: {results['macro_f1']:.4f}")
     #计算准确率和f1分数
-
-
+def find_longest_common_subarray(list1, list2):
+    """
+    查找两个列表中最长的公共连续子序列
+    返回在 list1 中的起始索引、结束索引（包含）和长度
+    """
+    if not list1 or not list2:
+        return 0, -1, 0  # 长度，起始点，终点
+    
+    n, m = len(list1), len(list2)
+    max_len = 0
+    start_idx = 0
+    end_idx = -1
+    
+    # 动态规划：dp[i][j] 表示以 list1[i-1] 和 list2[j-1] 结尾的公共子数组长度
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if list1[i-1] == list2[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+                if dp[i][j] > max_len:
+                    max_len = dp[i][j]
+                    end_idx = i - 1  # 在 list1 中的结束位置
+                    start_idx = end_idx - max_len + 1  # 在 list1 中的起始位置
+            else:
+                dp[i][j] = 0
+    
+    return max_len, start_idx, end_idx
+                   
+def value_data(dataset_name):
+    #验证predictions和数据集的顺序是否对应
+    output_dir = os.path.join(DATASET_NAME+"_final","id_scores")
+    id_scores = {}
+    data_src = os.path.join(dataset_name+"_final", "predictions.json")
+    with open(data_src, "r", encoding="utf-8") as f:
+        predictions = json.load(f)
+    pred_labels = []
+    orig_labels = []
+    ids = []
+    for p in predictions:
+        pred_labels.append(p[0])
+    for d in dataset:
+        orig_labels.append(1 if d['ground_truth']=='harmful' else 0)
+        ids.append(d["id"])
+    if DATASET_NAME=="FHM":
+        with open("C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/data/FHM/data/dev.jsonl","r",encoding="utf-8") as f:
+            sampled_lines = f.readlines()
+        for s in sampled_lines:
+            sample = json.loads(s)
+            id = sample["id"]
+            if id not in ids:
+                orig_labels.append(sample['label'])
+                ids.append(id)
+    # for i in range(len(predictions)):
+    #     if pred_labels[i]!=orig_labels[i]:
+    #         print(i)
+    if pred_labels==orig_labels:
+        print("标签相同")
+        for i in range(len(predictions)):
+            id_scores[ids[i]] = predictions[i]
+        with open(output_dir, "w", encoding="utf-8") as f:
+            json.dump(id_scores, f, indent=2, ensure_ascii=False)
+    else:
+        max_len, start_idx, end_idx = find_longest_common_subarray(orig_labels,pred_labels)
+        print(max_len)
+        print(start_idx)
+        print(end_idx)
+        print("标签不同")
+    
 if __name__ == "__main__":
     # predictions = predict(dataset=dataset)
     # file_path = os.path.join(DATASET_NAME, "scorer_results.json")
@@ -182,6 +252,7 @@ if __name__ == "__main__":
     #     json.dump(predictions, f, indent=2, ensure_ascii=False)
 
 
-    results = calculate_metrics("HARM", 8, 5,0.1)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
-    print(results)
+    # results = calculate_metrics("FHM",3,7,0.1)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
+    # print(results)
     # best_b, max_f1, best_acc = find_best_b("HARM",8,5)
+    value_data(DATASET_NAME)
