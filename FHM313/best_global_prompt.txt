@@ -1,0 +1,69 @@
+#####
+
+### A meme is harmful if and only if all of the following conditions are met:  
+*H1*: Targeted Attack on Protected Groups:  
+The combined image and text constitute a direct or indirect attack on people based on one or more of the following protected characteristics:  
+(1) Race, ethnicity, or nationality  
+(2) Immigration status  
+(3) Religion  
+(4) Caste  
+(5) Sex, gender identity, or sexual orientation  
+(6) Disability or disease  
+*H2*: Form of Attack Includes At Least One of the Following:  
+(1) Dehumanization: Comparing people to animals, objects, or non-human entities (e.g., implying a group “smells like a skunk” to degrade them).  
+(2) Statements of Inferiority: Claiming a group is inherently lesser, dirty, dangerous, or unworthy.  
+(3) Calls for Exclusion or Segregation: Advocating that a group be banned, isolated, or removed from society.  
+(4) Mocking Hate Crimes: Making light of violence or discrimination against protected groups.  
+*H3*: Multimodal Dependency:  
+(1) The harmful meaning only emerges from the combination of image and text.  
+(2) If you replace the image with a semantically similar but neutral alternative (e.g., swap a skunk for a rose), the meme becomes harmless.  
+(3) If you replace the text with a neutral but contextually plausible alternative (e.g., change “Love the way you smell today” to “Skunks have a strong odor”), the meme becomes harmless.  
+(4) If the meme remains harmful when either modality is removed or replaced, it may be unimodally harmful—but for this task, we focus on truly multimodal harm.  
+### A meme is harmless if any of the following is true:  
+*N1*: No Attack on Protected Groups:  
+The content does not target any group based on the protected characteristics listed above.  
+*N2*: Falls Under Explicit Exceptions:  
+(1) It criticizes or mocks specific individuals or public figures (e.g., politicians, celebrities), provided the criticism is not based on their protected characteristics.  
+(2) It condemns or ridicules groups that promote hate or violence (e.g., terrorist organizations, white supremacist groups)—this is not considered harmful.  
+*N3*: Lacks Combined Harmful Intent:  
+(1) The text alone is benign (e.g., “Look how many people love you”).  
+(2) The image alone is benign (e.g., a tumbleweed, a skunk, or a crowd).  
+(3) Only when combined do they potentially imply mockery or exclusion—but if that implication does not meet the criteria for dehumanization, inferiority, or exclusion, it remains harmless.  
+*N4*: Neutral or Factual Statements:  
+Descriptive, humorous, or ironic statements that do not demean or attack a protected group (e.g., “Skunks have a very particular smell”) are harmless, even if paired with relevant imagery.  
+*N5*: Contextual Understanding:  
+Evaluates the potential meaning and humor of the meme within specific cultural or social contexts, ensuring that interpretations consider the broader implications and intentions behind the content.  
+
+### Important Instructions: 
+① Do not classify based on keywords alone (e.g., the word “black” or an image of a religious symbol is not automatically harmful).  
+② Consider real-world context and implied meaning, not just literal content.  
+③ The presence of benign confounders confirms multimodal nuance: if changing either the image or text flips the meaning to non-harmful, then the original must be evaluated as a unified whole.  
+④ When in doubt, ask: “Would a reasonable person interpret this as an attack on a protected group based on who they are—not what they believe or do?”  
+### Scoring Protocol (Mandatory)
+Evaluate the meme along harmful criteria frameworks: . Assign a score from **1 to 9** for each primary dimension below (1 = completely absent, 9 = fully and clearly present).
+> **Notice:  
+> - Score **objectively**—a harmless meme can still have moderate H2/H3 scores if it flirts with ambiguity.  
+> - N1 and H1 are generally inversely related, but both can be low in unclear cases.  
+> - High N2 (e.g., ridiculing Nazis) overrides high H1/H2.
+### Scoring Protocol (Mandatory)
+Evaluate the meme along harmless criteria frameworks: . Assign a score from **1 to 9** for each primary dimension below (1 = completely absent, 9 = fully and clearly present).
+Note that your role is not to judge whether the meme is harmful or harmless, but to score the meme on each evaluation dimension based on how well it satisfies the criteria of that dimension.
+```json
+{
+"harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int
+  },
+"harmless_scores": {
+    "N1": int,
+    "N2": int,
+    "N3": int,
+    "N4": int,
+    "N5": int
+  },
+"reasoning": "Explaining which pathway dominates and why, referencing key scores."
+}
+Do not output anything outside the JSON block.
+
+#####

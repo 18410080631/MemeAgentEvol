@@ -121,7 +121,7 @@ def calculate_metrics(dataset_name, harmful_nums, harmless_nums,b):
     data_src = os.path.join(dataset_name+"_final", "predictions.json")
     with open(data_src, "r", encoding="utf-8") as f:
         predictions = json.load(f)
-    print(len(predictions))
+    # print(len(predictions))
     y_true = [] # 真实标签
     y_pred = [] # 预测标签
     for d in predictions:
@@ -129,8 +129,10 @@ def calculate_metrics(dataset_name, harmful_nums, harmless_nums,b):
         y_true.append(true_label)
         harmful_scores = d[1 : 1 + harmful_nums]
         harmless_scores = d[1 + harmful_nums : 1 + harmful_nums + harmless_nums]
-        avg_harmful = sum(harmful_scores) / len(harmful_scores) if harmful_scores else 0
-        avg_harmless = sum(harmless_scores) / len(harmless_scores) if harmless_scores else 0
+        # avg_harmful = sum(harmful_scores) / len(harmful_scores) if harmful_scores else 0
+        # avg_harmless = sum(harmless_scores) / len(harmless_scores) if harmless_scores else 0
+        avg_harmful = harmful_scores[2]
+        avg_harmless = harmless_scores[2]
         y_pred.append(1 if avg_harmful > avg_harmless - b else 0)
     acc = accuracy_score(y_true, y_pred)
     # 关键点：设置 average='macro' 来计算 Macro-F1
@@ -140,37 +142,57 @@ def calculate_metrics(dataset_name, harmful_nums, harmless_nums,b):
         "macro_f1": macro_f1
     }
 
-def find_best_b(dataset_name, harmful_nums, harmless_nums):
+def find_best_b():
+    """
+    calculate_metrics_func: 外部定义的计算指标函数
+    """
     best_b = 0
     max_f1 = -1
-    best_acc = 0
-    
-    # 定义搜索范围和步长 (例如 -10 到 10，每隔 0.1 搜索一次)
-    # 如果想更精确，可以把 0.1 改成 0.01
-    b_range = np.arange(-10, 10.1, 0.1)
-    
-    print(f"开始为数据集 {dataset_name} 寻找最优偏移量 b...")
-    
+    best_acc = 0  # 注意：这里的 best_acc 通常指加权后的总准确率
+    dataset_names = {
+        "HARM": [8, 5],
+        "FHM": [3, 7],
+        "MAMI": [8, 4]
+    }
+    weights = {"FHM": 0.2, "HARM": 0.2, "MAMI": 0.6}
+    # 打印表头
+    print(f"{'b':>6} | {'HARM (F1, ACC)':^18} | {'FHM (F1, ACC)':^18} | {'MAMI (F1, ACC)':^18} | {'Weighted F1'}")
+    print("-" * 90)
+    # 定义搜索范围
+    b_range = np.arange(-10, 1, 0.1)
     for b in b_range:
-        # 调用你写的计算函数
-        metrics = calculate_metrics(dataset_name, harmful_nums, harmless_nums, b)
-        current_f1 = metrics["macro_f1"]
-        current_acc = metrics["accuracy"]
-        
-        # 如果当前 F1 更高，则更新最优结果
-        if current_f1 > max_f1:
-            max_f1 = current_f1
+        mco_f1 = 0
+        temp_results = {} # 用于存储当前 b 下各个数据集的细节
+        for d, nums in dataset_names.items():
+            harmful_nums, harmless_nums = nums[0], nums[1]
+            # 调用计算函数
+            metrics = calculate_metrics(d, harmful_nums, harmless_nums, b)
+            f1 = metrics["macro_f1"]
+            acc = metrics["accuracy"]
+            # 存入临时字典方便后续打印
+            temp_results[d] = (f1, acc)
+            # 累加加权 F1
+            mco_f1 += weights[d] * f1
+        # 如果当前加权 F1 更高，更新最优结果并打印表格行
+        if mco_f1 > max_f1:
+            max_f1 = mco_f1
             best_b = b
-            best_acc = current_acc
             
-    print("-" * 30)
-    print(f"寻找完成！结果如下：")
+            # 格式化各个数据集的输出字符串
+            res_str = {}
+            for d in ["HARM", "FHM", "MAMI"]:
+                f1_val, acc_val = temp_results[d]
+                res_str[d] = f"({f1_val:.4f}, {acc_val:.4f})"
+
+            # 实时输出更新行
+            print(f"{b:>6.1f} | {res_str['HARM']:^18} | {res_str['FHM']:^18} | {res_str['MAMI']:^18} | {max_f1:.4f} ⭐")
+
+    print("-" * 90)
+    print(f"寻找完成！最终结果：")
     print(f"最优 b 值: {best_b:.2f}")
-    print(f"最高 Macro-F1: {max_f1:.4f}")
-    print(f"对应 Accuracy: {best_acc:.4f}")
-    print("-" * 30)
+    print(f"最高加权 Macro-F1: {max_f1:.4f}")
     
-    return best_b, max_f1, best_acc
+    return best_b, max_f1
 # 调用示例
 # results = calculate_metrics("MAMI", 8, 4)
 # print(f"Accuracy: {results['accuracy']:.4f}")
@@ -244,15 +266,21 @@ def value_data(dataset_name):
         print(start_idx)
         print(end_idx)
         print("标签不同")
-    
+
 if __name__ == "__main__":
     # predictions = predict(dataset=dataset)
     # file_path = os.path.join(DATASET_NAME, "scorer_results.json")
     # with open(file_path, "w", encoding="utf-8") as f:
     #     json.dump(predictions, f, indent=2, ensure_ascii=False)
 
+    # value_data(DATASET_NAME)
+    # _,_ = find_best_b()
+    b = -0.1
+    results = calculate_metrics("HARM",8,5,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
+    print(results)
+    results = calculate_metrics("FHM",3,7,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
+    print(results)
+    results = calculate_metrics("MAMI",8,4,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
+    print(results)
 
-    # results = calculate_metrics("FHM",3,7,0.1)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
-    # print(results)
-    # best_b, max_f1, best_acc = find_best_b("HARM",8,5)
-    value_data(DATASET_NAME)
+    

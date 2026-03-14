@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, f1_score
 class LLMTool:
     """封装LLM调用工具，替代原有的Agent类"""
     
-    def __init__(self, model_name: str, temperature: float = 0.3):
+    def __init__(self, model_name: str, temperature: float = 0.0):
         self.client = OpenAI(
             api_key=OPENAI_API_KEY,
             base_url=OPENAI_API_BASE
@@ -21,7 +21,7 @@ class LLMTool:
         self.model_name = model_name
         self.temperature = temperature
     
-    def call_llm(self, system_prompt: str, messages: list, max_tokens: int = 4096, 
+    def call_llm(self, system_prompt: str, messages: list, max_tokens: int = 2048, 
                     temperature: float = None, meme_src: str = None,
                     timeout: int = 15, max_retries: int = 3) -> str:
         """调用LLM，支持多模态输入 + 超时重试"""
@@ -63,7 +63,7 @@ class LLMTool:
                 return response.choices[0].message.content.strip()
             except (APITimeoutError, APIConnectionError, RateLimitError) as e:
                 if attempt == max_retries - 1:  # 最后一次重试仍失败
-                    raise RuntimeError(f"LLM call failed after {max_retries} attempts: {e}")
+                    print(f"LLM call failed after {max_retries}") 
                 time.sleep(2 ** attempt)  # 指数退避：2s, 4s, 8s...
 
 def extract_pdf_text(pdf_path: str) -> str:
@@ -76,6 +76,7 @@ def extract_pdf_text(pdf_path: str) -> str:
     for page in doc:
         text += page.get_text()
     doc.close()
+    print(len(text))
     llm_tool = LLMTool(model_name=MODEL_NAME,temperature=TEMPERATURE)
     system_prompt = """你是一名标准提取器，请从论文中系统梳理并详细阐述模因（meme）被判定为“有害”（harmful）与“无害”（harmless）的具体判别标准。要求如下：
 全面归纳两类判定的核心依据；
@@ -444,3 +445,150 @@ def predict_eval(filepath: str, samples: Union[List, List[List]]) -> Dict:
         result['has_label'] = False
     
     return result
+
+def caculate_acc(labels,h_n_scores):
+    predict = []
+    for i in range(len(labels)):
+        if sum(h_n_scores[i][0]) / len(h_n_scores[i][0]) > sum(h_n_scores[i][1]) / len(h_n_scores[i][1]):
+            predict.append(1)
+        else:
+            predict.append(0)
+    correct_nums = 0
+    for i in range(len(predict)):
+        labelsi = 1 if labels[i] == "harmful" else 0
+        if labelsi == predict[i]:
+            correct_nums+=1
+    return  {'accuracy': correct_nums / len(predict), 'f1': 0},predict
+            
+import os
+import json
+
+class PredictionSaver:
+    def __init__(self, dataset_name):
+        """
+        初始化预测保存器
+        :param dataset_name: 数据集名称（也将作为文件夹名）
+        """
+        self.dataset_name = dataset_name
+        self.cache_path = os.path.join(dataset_name, "prediction_cache.json")
+        # 确保目录存在
+        os.makedirs(self.dataset_name, exist_ok=True)
+        # 如果缓存文件不存在，创建初始化的空 JSON 文件
+        if not os.path.exists(self.cache_path):
+            with open(self.cache_path, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+    def _load_data(self):
+        """加载 JSON 数据"""
+        try:
+            with open(self.cache_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return {}
+    def _save_data(self, data):
+        """保存 JSON 数据"""
+        with open(self.cache_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    def save(self, round_id, meme_id, response):
+        """
+        保存预测结果
+        :param round_id: 轮次 (int 或 str)
+        :param meme_id: 图片/数据 ID (int 或 str)
+        :param response: 预测结果 (任意可 JSON 序列化对象)
+        """
+        data = self._load_data()
+        # 统一转为字符串，因为 JSON 键只能是字符串
+        r_key = str(round_id)
+        m_key = str(meme_id)
+        if r_key not in data:
+            data[r_key] = {}
+        data[r_key][m_key] = response
+        self._save_data(data)
+    def get(self, round_id, meme_id):
+        """
+        获取预测结果
+        :param round_id: 轮次
+        :param meme_id: 图片/数据 ID
+        :return: 预测结果，如果不存在则返回 None
+        """
+        data = self._load_data()
+        r_key = str(round_id)
+        m_key = str(meme_id)
+        if r_key in data and m_key in data[r_key]:
+            return data[r_key][m_key]
+        return None
+    def has_cached(self, round_id, meme_id):
+        """
+        检查是否已缓存
+        :return: True/False
+        """
+        return self.get(round_id, meme_id) is not None
+    def get_round_all(self, round_id):
+        """
+        获取某一轮次的所有预测结果
+        :return: 字典或空字典
+        """
+        data = self._load_data()
+        r_key = str(round_id)
+        return data.get(r_key, {})
+
+def analyze_misclassified_memes(data_list, labels):
+    # 1. 预测逻辑：Avg(Harmful) > Avg(Harmless) -> Predict 1
+    predictions = []
+    for item in data_list:
+        h_scores = list(item['harmful_scores'].values())
+        n_scores = list(item['harmless_scores'].values())
+        avg_h = sum(h_scores) / len(h_scores) if h_scores else 0
+        avg_n = sum(n_scores) / len(n_scores) if n_scores else 0
+        predictions.append(1 if avg_h > avg_n else 0)
+
+    # 分类误判样本索引
+    # FN: 有害(1)误判为无害(0) | FP: 无害(0)误判为有害(1)
+    fn_indices = [i for i, (p, l) in enumerate(zip(predictions, labels)) if p == 0 and l == 1]
+    fp_indices = [i for i, (p, l) in enumerate(zip(predictions, labels)) if p == 1 and l == 0]
+
+    def get_stat_str(indices, title, total_count, mode):
+        if total_count == 0:
+            return f"### {title}\n无相关误判样本。\n"
+        
+        # 统计容器
+        high_counts = {}     # 分数 > 7 的维度 (针对误判方向)
+        moderate_counts = {} # 分数 > 5 且 <= 7 的维度
+        low_counts = {}      # 分数 < 3 的维度
+        
+        for idx in indices:
+            item = data_list[idx]
+            if mode == "FP": # 无害判为有害：找偏高的有害维度和偏低的无害维度
+                for dim, score in item['harmful_scores'].items():
+                    if score > 7: high_counts[dim] = high_counts.get(dim, 0) + 1
+                    elif score > 5: moderate_counts[dim] = moderate_counts.get(dim, 0) + 1
+                for dim, score in item['harmless_scores'].items():
+                    if score < 2: low_counts[dim] = low_counts.get(dim, 0) + 1
+            
+            elif mode == "FN": # 有害判为无害：找偏高的无害维度和偏低的有害维度
+                for dim, score in item['harmless_scores'].items():
+                    if score > 7: high_counts[dim] = high_counts.get(dim, 0) + 1
+                    elif score > 5: moderate_counts[dim] = moderate_counts.get(dim, 0) + 1
+                for dim, score in item['harmful_scores'].items():
+                    if score < 2: low_counts[dim] = low_counts.get(dim, 0) + 1
+
+        # 过滤符合比例条件的维度
+        res_high = [dim for dim, count in high_counts.items() if count > total_count / 3]
+        res_mod = [dim for dim, count in moderate_counts.items() if count > total_count / 3]
+        res_low = [dim for dim, count in low_counts.items() if count > total_count / 2]
+        
+        target_high_type = "有害维度" if mode == "FP" else "无害维度"
+        target_low_type = "无害维度" if mode == "FP" else "有害维度"
+
+        res_str = f"### {title} (样本总数: {total_count})\n"
+        res_str += f"- 异常偏高{target_high_type} 建议删除 : {', '.join(res_high) or '无'}\n"
+        res_str += f"- 轻微偏高{target_high_type} 建议重写大改: {', '.join(res_mod) or '无'}\n"
+        res_str += f"- 显著偏低{target_low_type} 建议删除 (Score<2, 频率>1/2): {', '.join(res_low) or '无'}\n"
+        return res_str
+
+    
+    # FP: 统计有害分数高、无害分数低的异常
+    report1 = get_stat_str(fp_indices, "无害误判为有害 (FP / 误报)", len(fp_indices), "FP")
+    # FN: 统计无害分数高、有害分数低的异常
+    report2 = get_stat_str(fn_indices, "有害误判为无害 (FN / 漏报)", len(fn_indices), "FN")
+    
+    return [report1,report2]

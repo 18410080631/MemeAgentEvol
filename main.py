@@ -6,7 +6,6 @@ from config import DATASET_NAME,TASK_FHM_J_H,TASK_HARM_J_H,TASK_MAMI_J_H,JUDGE_S
 import random
 import pandas as pd
 seed =  46  #46 95%  54 90%
-random.seed(seed)
 local_path = 'C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/'
 if DATASET_NAME=="FHM":
     data_src = 'data/FHM/data/train.jsonl'
@@ -29,6 +28,7 @@ data_src = local_path + data_src
 paper_path = local_path + paper_path
 img_src = local_path+ img_src
 if DATASET_NAME == 'FHM':
+    random.seed(33)
     with open(data_src, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     sampled_lines = random.sample(lines, min(DATASET_NUM, len(lines)))
@@ -44,6 +44,7 @@ if DATASET_NAME == 'FHM':
         "paper_pdf_path": paper_path
         })
 if DATASET_NAME=="HARM":
+    random.seed(46)
     with open(data_src, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     sampled_lines = random.sample(lines, min(DATASET_NUM, len(lines)))
@@ -59,6 +60,7 @@ if DATASET_NAME=="HARM":
         "paper_pdf_path": paper_path
         })
 if DATASET_NAME == 'MAMI':
+    random.seed(46)
     data = pd.read_csv(data_src, sep='\t')
     sampled_data = data.sample(n=min(DATASET_NUM, len(data)), random_state=seed) 
     dataset = []  
