@@ -5,6 +5,7 @@ import os
 from config import DATASET_NAME,TASK_FHM_J_H,TASK_HARM_J_H,TASK_MAMI_J_H,JUDGE_SCORE,DATASET_NUM,error_focus_threshold
 import random
 import pandas as pd
+from tools import DescriptionSaver,get_description_of_meme
 seed =  46  #46 95%  54 90%
 local_path = 'C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/'
 if DATASET_NAME=="FHM":
@@ -27,22 +28,34 @@ else:
 data_src = local_path + data_src
 paper_path = local_path + paper_path
 img_src = local_path+ img_src
+descriptionsaver = DescriptionSaver(DATASET_NAME)
 if DATASET_NAME == 'FHM':
     random.seed(33)
     with open(data_src, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-    sampled_lines = random.sample(lines, min(DATASET_NUM, len(lines)))
+    sampled_lines = random.sample(lines, min(DATASET_NUM+10, len(lines)))
     dataset = []
+    data_num = 0
     for s in sampled_lines:
         sample = json.loads(s)
-        dataset.append({
-        'id':sample["id"],
-        "meme_src": f"{img_src}/{sample['img']}",       # 本地图像路径
-        "meme_text": sample['text'],
-        "meme_content": sample.get('description', ""),
-        "ground_truth": "harmful" if sample['label']==1 else 'harmless',
-        "paper_pdf_path": paper_path
-        })
+        des = descriptionsaver.get(sample["id"])
+        if des==None:
+            des = get_description_of_meme(sample['text'],f"{img_src}/{sample['img']}")
+            descriptionsaver.save(sample["id"],des)
+        if len(des) > 50:
+            data_num+=1
+            dataset.append({
+            'id':sample["id"],
+            "meme_src": f"{img_src}/{sample['img']}",       # 本地图像路径
+            "meme_text": sample['text'],
+            "meme_content": "The description of the Meme Pictrue:"+des,
+            "ground_truth": "harmful" if sample['label']==1 else 'harmless',
+            "paper_pdf_path": paper_path
+            })
+        else:
+            print(des)
+        if data_num>=DATASET_NUM:
+            break
 if DATASET_NAME=="HARM":
     random.seed(46)
     with open(data_src, 'r', encoding='utf-8') as f:
@@ -51,28 +64,38 @@ if DATASET_NAME=="HARM":
     dataset = []
     for s in sampled_lines:
         sample = json.loads(s)
-        dataset.append({
-        'id':sample["id"],
-        "meme_src": f"{img_src}/{sample['image']}",       # 本地图像路径
-        "meme_text": sample['text'],
-        "meme_content": sample.get('description', ""),
-        "ground_truth": "harmless" if 'not harmful' in sample['labels'] else 'harmful',
-        "paper_pdf_path": paper_path
-        })
+        des = descriptionsaver.get(sample["id"])
+        if des==None:
+            des = get_description_of_meme(sample['text'],f"{img_src}/{sample['image']}")
+            descriptionsaver.save(sample["id"],des)
+        if len(des)>50:
+            dataset.append({
+            'id':sample["id"],
+            "meme_src": f"{img_src}/{sample['image']}",       # 本地图像路径
+            "meme_text": sample['text'],
+            "meme_content": des,
+            "ground_truth": "harmless" if 'not harmful' in sample['labels'] else 'harmful',
+            "paper_pdf_path": paper_path
+            })
 if DATASET_NAME == 'MAMI':
     random.seed(46)
     data = pd.read_csv(data_src, sep='\t')
     sampled_data = data.sample(n=min(DATASET_NUM, len(data)), random_state=seed) 
     dataset = []  
     for _, row in sampled_data.iterrows():
-        dataset.append({
-            'id': row['file_name'].split('.')[0],  # 假设 TSV 中有 'id' 列，按实际字段调整
-            "meme_src": f"{img_src}/{row['file_name']}",
-            "meme_text": row['text'],
-            "meme_content": row.get('description', ""),
-            "ground_truth": "harmless" if row['label']==0 else 'harmful',
-            "paper_pdf_path": paper_path
-        })
+        des = descriptionsaver.get(row['file_name'].split('.')[0])
+        if des==None:
+            des = get_description_of_meme(row['text'],f"{img_src}/{row['file_name']}")
+            descriptionsaver.save(row['file_name'].split('.')[0],des)
+        if len(des)>50:
+            dataset.append({
+                'id': row['file_name'].split('.')[0],  # 假设 TSV 中有 'id' 列，按实际字段调整
+                "meme_src": f"{img_src}/{row['file_name']}",
+                "meme_text": row['text'],
+                "meme_content": des,
+                "ground_truth": "harmless" if row['label']==0 else 'harmful',
+                "paper_pdf_path": paper_path
+            })
 # 示例数据集（10条）
 print('数据加载完成')
 initial_state: AgentState = {
@@ -110,6 +133,7 @@ initial_state: AgentState = {
     # ====== 误判统计 ======
     "pre1l0": [],
     "pre0l1": [],
+    "report":[]
 }
 
 final_state = app.invoke(initial_state)
@@ -119,7 +143,7 @@ with open(f"output/{DATASET_NAME}/prompt_evolution.json", "w", encoding="utf-8")
     json.dump({
         "total_iterations": final_state["iteration"],
         "converged": final_state["converged"],
-        "final_prompt": final_state["best_global_prompt"],
+        "final_prompt": final_state["best_global_info"]["best_global_prompt"],
         "prompt_history": final_state["prompt_history"]
     }, f, indent=2, ensure_ascii=False)
 

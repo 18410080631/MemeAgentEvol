@@ -1,93 +1,80 @@
-#####
-### A meme is harmful if and only if all of the following conditions are met:  
-*H1*: Targeted Attack on Protected Groups:  
-The combined image and text constitute a direct or indirect attack on people based on one or more of the following protected characteristics:  
+### Comprehensive Meme Evaluation for Harmfulness
+
+A meme is classified as harmful if it meets one or more of the following criteria:
+
+*H1*: **Targeting of Protected Groups**:  
+The meme must explicitly or implicitly attack individuals based on characteristics such as:  
 (1) Race, ethnicity, or nationality  
 (2) Immigration status  
-(3) Religion  
+(3) Religion or beliefs  
 (4) Caste  
-(5) Sex, gender identity, or sexual orientation  
-(6) Disability or disease  
-*H2*: Form of Attack Includes At Least One of the Following:  
-(1) Dehumanization: Comparing people to animals, objects, or non-human entities (e.g., implying a group “smells like a skunk” to degrade them).  
-(2) Statements of Inferiority: Claiming a group is inherently lesser, dirty, dangerous, or unworthy.  
-(3) Calls for Exclusion or Segregation: Advocating that a group be banned, isolated, or removed from society.  
-(4) Mocking Hate Crimes: Making light of violence or discrimination against protected groups.  
-*H3*: Multimodal Dependency:  
-(1) The harmful meaning only emerges from the combination of image and text.  
-(2) If you replace the image with a semantically similar but neutral alternative (e.g., swap a skunk for a rose), the meme becomes harmless.  
-(3) If you replace the text with a neutral but contextually plausible alternative (e.g., change “Love the way you smell today” to “Skunks have a strong odor”), the meme becomes harmless.  
-(4) If the meme remains harmful when either modality is removed or replaced, it may be unimodally harmful—but for this task, we focus on truly multimodal harm.  
-*H4*: Implicit Harmful Language:  
-(1) The text contains language that, while not explicitly targeting a protected group, implies harmful stereotypes or biases.  
-(2) The language may not directly reference protected characteristics but can still foster a hostile environment.  
-*H5*: Contextual Harm:  
-(1) The meme's context (e.g., historical, cultural) contributes to its harmful interpretation, even if the content appears benign on the surface.  
-(2) The surrounding discourse or events may amplify the harmful nature of the meme.  
-### A meme is harmless if any of the following is true:  
-*N1*: No Attack on Protected Groups:  
-The content does not target any group based on the protected characteristics listed above.  
-*N2*: Falls Under Explicit Exceptions:  
-(1) It criticizes or mocks specific individuals or public figures (e.g., politicians, celebrities), provided the criticism is not based on their protected characteristics.  
-(2) It condemns or ridicules groups that promote hate or violence (e.g., terrorist organizations, white supremacist groups)—this is not considered harmful.  
-*N3*: Lacks Combined Harmful Intent:  
-(1) The text alone is benign (e.g., “Look how many people love you”).  
-(2) The image alone is benign (e.g., a tumbleweed, a skunk, or a crowd).  
-(3) Only when combined do they potentially imply mockery or exclusion—but if that implication does not meet the criteria for dehumanization, inferiority, or exclusion, it remains harmless.  
-*N4*: Neutral or Factual Statements:  
-Descriptive, humorous, or ironic statements that do not demean or attack a protected group (e.g., “Skunks have a very particular smell”) are harmless, even if paired with relevant imagery.  
-*N5*: Humor and Satire:  
-(1) The content employs humor or satire that does not demean or attack a protected group.  
-(2) The intent is to critique or highlight absurdity without perpetuating harm.  
-*N6*: Self-Deprecating Humor:  
-(1) The content includes humor that targets the creator or a non-protected group, avoiding harm to any protected characteristics.  
-(2) The humor is benign and does not reinforce negative stereotypes.  
+(5) Gender identity or sexual orientation  
+(6) Disability or health conditions  
+Evaluate whether the content expresses derogatory sentiments or threats towards these groups, particularly in social or familial contexts.
+
+*H2*: **Symbolic and Linguistic Offensiveness**:  
+Assess the meme for harmful attributes reflecting agenda-driven intent, including:  
+(1) Dehumanization: Portraying individuals as inanimate or non-human.  
+(2) Inferiority Claims: Suggesting a group is lesser, untrustworthy, or dangerous.  
+(3) Exclusionary Tactics: Promoting the isolation of specific groups.  
+(4) Trivialization: Making light of violence or discrimination against marginalized groups.  
+(5) Ridicule: Openly mocking cultural, religious, or gender identities.  
+Ensure a nuanced examination of text-image interactions; benign imagery should not be misinterpreted as harmful.
+
+*H3*: **Cultural and Contextual Understanding**:  
+(1) Evaluate memes in their cultural and social context to discern humor or sarcasm accurately.  
+(2) Identify comedic elements that may be misinterpreted as harmful outside their cultural milieu.  
+(3) Assess how humor and social interactions convey meanings that do not equate to an attack on protected groups.
+
+*H4*: **Identification of Negative Intent in Text-Image Interaction**:  
+(1) Analyze how the combination of text and imagery may create negative implications not apparent when evaluated separately.  
+(2) Determine if replacing elements with neutral alternatives reduces perceived harm.  
+(3) Understand instances where altering one component still retains harmful implications.
+
+*H5*: **Opposition to Controversial Topics**:  
+Evaluate whether the meme actively resists forms of attack or hate speech, focusing on its stance and societal opposition to harmful rhetoric.
+
+*H6*: **Humor and Cultural Context Understanding**:  
+Assess the meme for humor elements and cultural context to avoid misclassifying light-hearted content as harmful. Analyze how the meme conveys meaning in specific social settings.
+
+A meme is categorized as harmless if it meets the following criteria:
+
+*N1*: **Lack of Targeted Attack**:  
+There is no evidence of derogatory content aimed at any protected characteristics.
+
+*N2*: **Critique Without Harm**:  
+(1) Provides valid criticism of public figures unrelated to protected characteristics.  
+(2) Dismisses hate speech against extremists and similar figures as non-harmful.
+
+*N3*: **Benign Intent**:  
+Text and images can independently exist as non-harmful, possibly implying mockery without crossing into harmful territory.
+
 ### Important Instructions:  
-① Do not classify based on keywords alone (e.g., the word “black” or an image of a religious symbol is not automatically harmful).  
-② Consider real-world context and implied meaning, not just literal content.  
-③ The presence of benign confounders confirms multimodal nuance: if changing either the image or text flips the meaning to non-harmful, then the original must be evaluated as a unified whole.  
-④ When in doubt, ask: “Would a reasonable person interpret this as an attack on a protected group based on who they are—not what they believe or do?”  
+1. Avoid classification based solely on keywords; deepen analysis in the broader context.  
+2. Evaluate implied meanings beyond literal interpretations.  
+3. Ensure combined implications from text and images are thoroughly assessed.  
+4. Determine if a reasonable person would perceive it as an attack on protected groups.
+
 ### Scoring Protocol (Mandatory)  
-Evaluate the meme along harmful criteria frameworks: Assign a score from **1 to 9** for each primary dimension below (1 = completely absent, 9 = fully and clearly present).  
-> **Notice:  
-> - Score **objectively**—a harmless meme can still have moderate H2/H3 scores if it flirts with ambiguity.  
-> - N1 and H1 are generally inversely related, but both can be low in unclear cases.  
-> - High N2 (e.g., ridiculing Nazis) overrides high H1/H2.  
-### Scoring Protocol (Mandatory)  
-Evaluate the meme along harmless criteria frameworks: Assign a score from **1 to 9** for each primary dimension below (1 = completely absent, 9 = fully and clearly present).  
-Note that your role is not to judge whether the meme is harmful or harmless, but to score the meme on each evaluation dimension based on how well it satisfies the criteria of that dimension.  
-```json
+Evaluate the meme using all criteria, scoring from **1 to 9** for each dimension (1 = completely absent, 9 = clearly present).  
+
+- Use the full scoring range; avoid extreme scores.  
+- A high score in H1 does not necessitate a high score in H2; evaluate dimensions independently.  
+- Maintain rigorous focus on accurately identifying the harmful or harmless nature of the meme through comprehensive evaluation.
+
 {
   "harmful_scores": {
     "H1": int,
     "H2": int,
     "H3": int,
     "H4": int,
-    "H5": int
+    "H5": int,
+    "H6": int
   },
   "harmless_scores": {
     "N1": int,
     "N2": int,
-    "N3": int,
-    "N4": int,
-    "N5": int,
-    "N6": int
+    "N3": int
   },
-  "reasoning": "Explaining which pathway dominates and why, referencing key scores."
+  "reasoning": "Outline the primary reasoning behind your scoring decisions."
 }
-```  
-### Important Instructions:  
-- Be aware of Extreme Scoring: The model may assign extreme scores across all dimensions due to preconceived notions, resulting in a loss of discriminative power between dimensions.  
-- Note Dimensional Logical Coupling: High scores in one dimension should not automatically imply high scores in another (e.g., a high score in H1 does not necessitate a high score in H2).  
-- Watch for Instruction Attention Drift: Ensure that core constraints are not overlooked due to lengthy prompts.  
-- Consider Visual-Textual Logical Disconnection: The model should infer the "emergent" intent from the combination of image and text, rather than evaluating them independently.  
-*H6*: Contextual Humor Recognition:  
-(1) The meme employs humor that is contextually relevant and does not demean or attack a protected group.  
-(2) The humor is understood within its historical or cultural context, ensuring it does not perpetuate harm.  
-*H7*: Implicit Contextual Bias:  
-(1) The text or image may imply harmful stereotypes or biases based on historical or cultural contexts.  
-(2) The evaluation should consider the potential for harm even when explicit attacks are absent.  
-*H8*: Nuanced Multimodal Interpretation:  
-(1) The evaluation must consider how the combination of image and text creates a unique meaning that may not be present in either modality alone.  
-(2) If the meme's meaning shifts significantly when either modality is altered, it should be assessed as a unified whole.  
-#####

@@ -39,9 +39,7 @@ class AgentState(TypedDict):
     # 全局评估结果
     global_errors: List[str]  # 全局错误样本ID
     global_accuracy: float
-    best_global_accuracy: float
-    best_global_prompt: str
-    best_global_code: str
+    best_global_info: Dict
     converged: bool
     
     # ====== 错误聚焦相关 ======
@@ -50,6 +48,7 @@ class AgentState(TypedDict):
     error_predictions: Dict[str, dict]  # 错误样本子集的预测
     error_errors: List[str]  # 错误样本中仍然错误的ID
     error_accuracy: float
+    best_error_info:Dict
     best_error_accuracy: float
     best_error_prompt: str
     best_error_code: str
@@ -80,3 +79,5 @@ class AgentState(TypedDict):
     error_weights:List
 
     error_feature_importance:List
+    #==========report==============
+    report:list

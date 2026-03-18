@@ -58,13 +58,44 @@ class LLMTool:
                     messages=full_messages,
                     temperature=temperature if temperature is not None else self.temperature,
                     max_tokens=max_tokens,
-                    timeout=timeout  # ← 关键：15秒超时
+                    timeout=timeout, # ← 关键：15秒超时
+                    # extra_body={"enable_thinking":False},
                 )
                 return response.choices[0].message.content.strip()
             except (APITimeoutError, APIConnectionError, RateLimitError) as e:
                 if attempt == max_retries - 1:  # 最后一次重试仍失败
                     print(f"LLM call failed after {max_retries}") 
                 time.sleep(2 ** attempt)  # 指数退避：2s, 4s, 8s...
+
+def get_description_of_meme(meme_text: str,meme_src:str) -> str:
+    """获取对meme的客观描述"""
+    system_prompt = """
+You are a precision Image-to-Text Transcriber. Your goal is to provide objective, high-density visual data for accessibility indexing. 
+### GUIDELINES:
+1. **Objectivity**: Describe physical attributes (colors, shapes, textures) and identify public figures only if they are clearly recognizable for indexing purposes.
+2. **Neutrality**: Treat all elements as graphical data. Focus on the spatial arrangement of text and subjects.
+3. **Format**: Use a technical, inventory-style tone. Avoid any evaluative adjectives or socio-political analysis.
+"""
+    evidence_judge_template = (
+"""
+Generate a Concise Visual Data Audit. Start directly with "Visual Audit Summary:".
+1. **Subjects**: List individuals (Left to Right). Briefly state their physical appearance and clothing.
+2. **Text**: Transcribe all visible text verbatim. Note its position (e.g., "Bold white text at bottom").
+3. **Setting**: 1-sentence description of the background environment.
+4. **Graphic Overlays**: Identify any added symbols, logos, or digital edits.
+5. **Image Medium**: Define the format (e.g., "Photograph with digital text overlay").
+**Constraint**: Keep the entire response under 800 words. No warnings or preambles."""
+    )
+    llm_tool = LLMTool(model_name=MODEL_NAME, temperature=1.0)
+    fact_judge_response = llm_tool.call_llm(
+        system_prompt=system_prompt,
+        messages=[{"role": "user", "content": evidence_judge_template}],
+        meme_src=meme_src,
+        temperature=TEMPERATURE,
+        max_tokens=4096
+    )
+    # print(f"✅ 模因描述: {fact_judge_response}")
+    return fact_judge_response
 
 def extract_pdf_text(pdf_path: str) -> str:
     """从 PDF 提取全文文本"""
@@ -446,20 +477,97 @@ def predict_eval(filepath: str, samples: Union[List, List[List]]) -> Dict:
     
     return result
 
-def caculate_acc(labels,h_n_scores):
+def caculate_acc(labels, h_n_scores):
     predict = []
     for i in range(len(labels)):
-        if sum(h_n_scores[i][0]) / len(h_n_scores[i][0]) > sum(h_n_scores[i][1]) / len(h_n_scores[i][1]):
+        scores_0 = h_n_scores[i][0]
+        scores_1 = h_n_scores[i][1]
+        avg_0 = sum(scores_0) / len(scores_0) if scores_0 else 0
+        avg_1 = sum(scores_1) / len(scores_1) if scores_1 else 0
+        if avg_0 > avg_1:
             predict.append(1)
         else:
             predict.append(0)
-    correct_nums = 0
-    for i in range(len(predict)):
-        labelsi = 1 if labels[i] == "harmful" else 0
-        if labelsi == predict[i]:
-            correct_nums+=1
-    return  {'accuracy': correct_nums / len(predict), 'f1': 0},predict
-            
+    y_true = [1 if label == "harmful" else 0 for label in labels]
+    if len(predict) == 0:
+        accuracy = 0.0
+    else:
+        correct_nums = sum(1 for t, p in zip(y_true, predict) if t == p)
+        accuracy = correct_nums / len(predict)
+    f1 = 0.0
+    unique_labels = set(y_true)
+    if len(unique_labels) < 2:
+        f1 = 0.0
+    else:
+        f1_scores = []
+        for class_val in [0, 1]:
+            tp = sum(1 for t, p in zip(y_true, predict) if t == class_val and p == class_val)
+            fp = sum(1 for t, p in zip(y_true, predict) if t != class_val and p == class_val)
+            fn = sum(1 for t, p in zip(y_true, predict) if t == class_val and p != class_val)
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            if precision + recall > 0:
+                f1_class = 2 * (precision * recall) / (precision + recall)
+            else:
+                f1_class = 0
+            f1_scores.append(f1_class)
+        f1 = sum(f1_scores) / len(f1_scores)
+    return {'accuracy': accuracy, 'f1': f1}, predict
+
+
+import pandas as pd
+import numpy as np
+
+def analyze_score_features(labels, h_titles, h_scores, s_titles, s_scores, threshold_low=3, threshold_high=7, top_k=5):
+    # 1. 标签预处理
+    num_labels = [1 if l == "harmful" or l == 1 else 0 for l in labels]
+    
+    df_h = pd.DataFrame(h_scores, columns=h_titles)
+    df_s = pd.DataFrame(s_scores, columns=s_titles)
+    df_h['label'] = num_labels
+    df_s['label'] = num_labels
+
+    # 定义内部过滤函数：比例 > 0.4 才保留名称
+    def get_frequent_dims(series, threshold=0.4):
+        filtered = series[series > threshold]
+        if filtered.empty:
+            return "没有相关维度"
+        # 只返回维度名称（index），如果想看比例可以加上 .to_string()
+        return ", ".join(filtered.index.tolist())
+
+    results = {}
+    
+    # --- 计算各维度的异常比例 ---
+    h_pos = df_h[df_h['label'] == 1].drop(columns=['label'])
+    s_pos = df_s[df_s['label'] == 1].drop(columns=['label'])
+    h_neg = df_h[df_h['label'] == 0].drop(columns=['label'])
+    s_neg = df_s[df_s['label'] == 0].drop(columns=['label'])
+
+    # 逻辑核心：计算 mean (比例)
+    pos_low_h = (h_pos <= threshold_low).mean()
+    pos_high_s = (s_pos >= threshold_high).mean()
+    neg_high_h = (h_neg >= threshold_high).mean()
+    neg_low_s = (s_neg <= threshold_low).mean()
+
+    # --- 构造 Report ---
+    report1 = "### 1. 有害样本 (Label=1) 表现异常建议删除的维度 ###\n"
+    report1 += f"【漏报维度】(Harmful打分过低): {get_frequent_dims(pos_low_h)}\n"
+    report1 += f"【误导维度】(Harmless打分过高): {get_frequent_dims(pos_high_s)}\n"
+
+    report2 = "### 2. 无害样本 (Label=0) 表现异常建议删除的维度 ###\n"
+    report2 += f"【误报维度】(Harmful打分过高): {get_frequent_dims(neg_high_h)}\n"
+    report2 += f"【偏差维度】(Harmless打分过低): {get_frequent_dims(neg_low_s)}\n"
+
+    # 3. 全局静态维度 (方差极小)
+    all_scores = pd.concat([df_h.drop(columns=['label']), df_s.drop(columns=['label'])], axis=1)
+    static_series = all_scores.std().sort_values()
+    # 假设标准差小于 0.1 认为是“基本不变”
+    static_dims = static_series[static_series < 0.1]
+    report = "### 3. 分数基本无变化的无效维度 ###\n"
+    report += (", ".join(static_dims.index.tolist()) if not static_dims.empty else "没有相关维度") + "\n"
+
+    return report, report1, report2
+
 import os
 import json
 
@@ -531,64 +639,52 @@ class PredictionSaver:
         r_key = str(round_id)
         return data.get(r_key, {})
 
-def analyze_misclassified_memes(data_list, labels):
-    # 1. 预测逻辑：Avg(Harmful) > Avg(Harmless) -> Predict 1
-    predictions = []
-    for item in data_list:
-        h_scores = list(item['harmful_scores'].values())
-        n_scores = list(item['harmless_scores'].values())
-        avg_h = sum(h_scores) / len(h_scores) if h_scores else 0
-        avg_n = sum(n_scores) / len(n_scores) if n_scores else 0
-        predictions.append(1 if avg_h > avg_n else 0)
-
-    # 分类误判样本索引
-    # FN: 有害(1)误判为无害(0) | FP: 无害(0)误判为有害(1)
-    fn_indices = [i for i, (p, l) in enumerate(zip(predictions, labels)) if p == 0 and l == 1]
-    fp_indices = [i for i, (p, l) in enumerate(zip(predictions, labels)) if p == 1 and l == 0]
-
-    def get_stat_str(indices, title, total_count, mode):
-        if total_count == 0:
-            return f"### {title}\n无相关误判样本。\n"
-        
-        # 统计容器
-        high_counts = {}     # 分数 > 7 的维度 (针对误判方向)
-        moderate_counts = {} # 分数 > 5 且 <= 7 的维度
-        low_counts = {}      # 分数 < 3 的维度
-        
-        for idx in indices:
-            item = data_list[idx]
-            if mode == "FP": # 无害判为有害：找偏高的有害维度和偏低的无害维度
-                for dim, score in item['harmful_scores'].items():
-                    if score > 7: high_counts[dim] = high_counts.get(dim, 0) + 1
-                    elif score > 5: moderate_counts[dim] = moderate_counts.get(dim, 0) + 1
-                for dim, score in item['harmless_scores'].items():
-                    if score < 2: low_counts[dim] = low_counts.get(dim, 0) + 1
-            
-            elif mode == "FN": # 有害判为无害：找偏高的无害维度和偏低的有害维度
-                for dim, score in item['harmless_scores'].items():
-                    if score > 7: high_counts[dim] = high_counts.get(dim, 0) + 1
-                    elif score > 5: moderate_counts[dim] = moderate_counts.get(dim, 0) + 1
-                for dim, score in item['harmful_scores'].items():
-                    if score < 2: low_counts[dim] = low_counts.get(dim, 0) + 1
-
-        # 过滤符合比例条件的维度
-        res_high = [dim for dim, count in high_counts.items() if count > total_count / 3]
-        res_mod = [dim for dim, count in moderate_counts.items() if count > total_count / 3]
-        res_low = [dim for dim, count in low_counts.items() if count > total_count / 2]
-        
-        target_high_type = "有害维度" if mode == "FP" else "无害维度"
-        target_low_type = "无害维度" if mode == "FP" else "有害维度"
-
-        res_str = f"### {title} (样本总数: {total_count})\n"
-        res_str += f"- 异常偏高{target_high_type} 建议删除 : {', '.join(res_high) or '无'}\n"
-        res_str += f"- 轻微偏高{target_high_type} 建议重写大改: {', '.join(res_mod) or '无'}\n"
-        res_str += f"- 显著偏低{target_low_type} 建议删除 (Score<2, 频率>1/2): {', '.join(res_low) or '无'}\n"
-        return res_str
-
-    
-    # FP: 统计有害分数高、无害分数低的异常
-    report1 = get_stat_str(fp_indices, "无害误判为有害 (FP / 误报)", len(fp_indices), "FP")
-    # FN: 统计无害分数高、有害分数低的异常
-    report2 = get_stat_str(fn_indices, "有害误判为无害 (FN / 漏报)", len(fn_indices), "FN")
-    
-    return [report1,report2]
+class DescriptionSaver:
+    def __init__(self, dataset_name):
+        """
+        初始化预测保存器
+        :param dataset_name: 数据集名称（也将作为文件夹名）
+        """
+        self.dataset_name = dataset_name
+        self.cache_path = os.path.join(dataset_name, "description_cache.json")
+        # 确保目录存在
+        os.makedirs(self.dataset_name, exist_ok=True)
+        # 如果缓存文件不存在，创建初始化的空 JSON 文件
+        if not os.path.exists(self.cache_path):
+            with open(self.cache_path, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+    def _load_data(self):
+        """加载 JSON 数据"""
+        try:
+            with open(self.cache_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return {}
+    def _save_data(self, data):
+        """保存 JSON 数据"""
+        with open(self.cache_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    def save(self, meme_id, response):
+        """
+        保存预测结果
+        :param round_id: 轮次 (int 或 str)
+        :param meme_id: 图片/数据 ID (int 或 str)
+        :param response: 预测结果 (任意可 JSON 序列化对象)
+        """
+        data = self._load_data()
+        # 统一转为字符串，因为 JSON 键只能是字符串
+        m_key = str(meme_id)
+        data[m_key] = response
+        self._save_data(data)
+    def get(self,meme_id):
+        """
+        获取预测结果
+        :param round_id: 轮次
+        :param meme_id: 图片/数据 ID
+        :return: 预测结果，如果不存在则返回 None
+        """
+        data = self._load_data()
+        m_key = str(meme_id)
+        if m_key in data:
+            return data[m_key]
+        return None
