@@ -1,0 +1,78 @@
+You are tasked with evaluating a meme to assign scores based on refined classification dimensions, focusing on the nuances between harmful and harmless content. Each criterion should be evaluated on a scale from 1 to 9, where 1 indicates complete absence of the characteristic, and 9 indicates its complete presence. 
+
+**Instructions for Evaluation:**
+
+1. **Definitions**  
+   - **Harmful (Indicating Misogyny)**: Assign high scores if the meme overtly or subtly portrays women in a degrading or sexist manner, whether through explicit derogation or implied negativity. Pay close attention to subtle expressions and their implications.  
+   - **Harmless (Non-Misogynous)**: A meme should be scored as harmless if it does not express or imply any destructive sentiments towards women or includes negative representations of female groups.
+
+2. **Assessing Harmful Content**  
+   - Identify harm depicted through both **direct** insults and **subtle** suggestions in visuals or text. Ensure a comprehensive scoring approach that accounts for both aspects of harmfulness.
+
+3. **Cultural Context Impact Assessment**  
+   - Analyze the meme within its specific cultural framework. Ask: *"Does the meme’s content reflect or challenge societal values regarding women?"* *"Are there underlying meanings in the humor that could suggest societal critiques or may inadvertently reinforce stereotypes?"* This will enhance understanding of the meme’s broader implications.
+
+4. **Humor Impact Analysis**  
+   - Evaluate the role of humor within the meme. Assess how humorous elements are constructed and their potential impact on the portrayal of women, specifically distinguishing between harmless humor and potentially harmful implications.
+
+5. **Gender Role Limitations Examination**  
+   - Assess whether the meme constrains women's roles through language or imagery, implicitly suggesting specific gender expectations. This assessment will aid in identifying content that perpetuates indirect gender discrimination.
+
+**Scoring Dimensions:**
+
+**Harmful Criteria (Indicating Misogyny):**
+- **H1: Direct Negative Targeting**  
+  Score highly if the meme explicitly or implicitly targets women in a degrading manner.
+
+- **H2: Clear Offensive Content**  
+  Award high scores for any overtly sexist or derogatory expressions against women, assessing both direct and nuanced implications.
+
+- **H3: Interaction of Harm Elements**  
+  Score higher when harmful interpretations arise from how visual and text elements combine.
+
+- **H4: Sensitivity to Contextual Intent**  
+  Evaluate perceived intent, particularly if humor evokes negative perceptions about women.
+
+- **H5: Stereotype Reinforcement Assessment**  
+  Determine if the meme supports negative gender stereotypes or challenges established social norms.
+
+- **H6: Humor Effectiveness Evaluation**  
+  Analyze how humor functions in the meme to determine if it critiques societal issues without disparaging women.
+
+- **H7: Mockery Simplification Assessment**  
+  Analyze if humor undermines women's dignity, distinguishing between light-heartedness and targeted derision.
+
+- **H8: Transmission of Gender Stereotypes**  
+  Score based on whether the meme reinforces harmful gender stereotypes, especially within comedic interpretations.
+
+- **H9: Nature of Humor's Social Impact**  
+  Assess if the humor perpetuates gender inequality or highlights societal injustices, identifying nuanced harmful narratives.
+
+**Harmless Criteria (Non-Misogynous):**
+- **N1: Absence of Direct Attack**  
+  Score highly if the meme does not destructively target women or female groups.
+
+- **N3: Presence of Minimal Harmlessness**  
+  Score high only if:
+    - The meme exhibits absurdity without factual claims about women, or  
+    - It critiques social issues in a manner that is respectful and non-derogatory towards women. Low scores (≤ 3) should be assigned if derogatory portrayals exist, while higher scores (≥ 6) apply to fictional representations that avoid harmful implications.
+
+**Output Format:**
+{
+  "harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int,
+    "H4": int,
+    "H5": int,
+    "H6": int,
+    "H7": int,
+    "H8": int,
+    "H9": int
+  },
+  "harmless_scores": {
+    "N1": int,
+    "N3": int
+  },
+  "reasoning": "Provide a clear explanation according to the updated criteria, addressing: (1) whether the meme targets women negatively, (2) how imagery and text interact to present possible harm, and (3) the rationale for the score assigned to N3 based on context."
+}

@@ -71,20 +71,20 @@ def get_description_of_meme(meme_text: str,meme_src:str) -> str:
     """获取对meme的客观描述"""
     system_prompt = """
 You are a precision Image-to-Text Transcriber. Your goal is to provide objective, high-density visual data for accessibility indexing. 
-### GUIDELINES:
-1. **Objectivity**: Describe physical attributes (colors, shapes, textures) and identify public figures only if they are clearly recognizable for indexing purposes.
-2. **Neutrality**: Treat all elements as graphical data. Focus on the spatial arrangement of text and subjects.
-3. **Format**: Use a technical, inventory-style tone. Avoid any evaluative adjectives or socio-political analysis.
+You need to Generate a Concise Visual description Follow the format and style below:
+Example1:
+Visual Audit Summary: /n1. Subjects: One female individual with reddish-brown hair in a ponytail, wearing a dark short-sleeved dress with a black belt and large hoop earrings. She is depicted in a high-step, straddling motion, with her left leg planted on the ground outside the vehicle and her right leg raised and bent at a sharp angle, with the foot resting inside the car on or near the red bucket seat, suggesting an awkward attempt to step into or out of a low-slung car. Her torso is bent forward, looking down toward the raised leg. Due to this high-leg-lift posture and the short length of the dark dress, the skirt is hiked up high along her raised thigh, and her grey or off-white undergarment and the tops of her inner thighs are clearly visible and exposed to the camera between her legs and the dress hem. /n2. Text: 'THERE ARE MULTIPLE REASONS TO LOWER YOUR CAR' in bold white sans-serif uppercase letters at the top; 'THIS IS ONE OF THEM' in bold white sans-serif uppercase letters at the bottom. /n3. Setting: The interior and open door area of a car with red and black leather bucket seats. /n4. Graphic Overlays: Vertical watermarks reading 'VIA 9GAG.COM' on the left edge and 'MemeCenter.com' on the right edge. /n5. Image Medium: Photograph with digital text overlay in meme format.
+Example2:
+Visual Audit Summary: /n1. Subjects: A person in black clothing performing a jump to brace their limbs against the walls of a hallway, avoiding contact with the floor. The original head is obscured by a cropped image of a woman with glasses and an expressive facial expression (commonly known as the 'Big Red' or 'feminist' meme face). /n2. Text: 'The floor is the fact women are inferior to men' in black sans-serif text at the top; 'Fe🅱️inism' in black sans-serif text at the bottom, featuring a red square 'B' emoji. /n3. Setting: A brightly lit, empty institutional hallway with white walls, a tan floor, and a wooden door. /n4. Graphic Overlays: A cropped square image of a woman's face superimposed over the jumper's head; a red square 'B' emoji replacing the 'm' in 'Feminism'. /n5. Image Medium: Two-panel digital composite meme based on the 'The Floor is Lava' challenge. 
+Example3:
+Visual Audit Summary: /n1. Subjects: Two male characters from the Marvel Cinematic Universe. Left: Tom Holland as Peter Parker/Spider-Man in the Iron Spider suit. Right: Benedict Cumberbatch as Doctor Stephen Strange in his superhero attire and Cloak of Levitation. /n2. Text: Top-left: 'USA' and 'We have 250,000 cases'; Top-right: 'China' and 'We have 85,000'; Bottom-left: 'Oh, we're using our made up numbers then. So we have like 10 cases.' /n3. Setting: A dark, metallic, or cavernous interior environment, specifically a scene from 'Avengers: Infinity War'. /n4. Graphic Overlays: White text boxes with black sans-serif text placed over the original subtitles area. /n5. Image Medium: Four-panel digital meme using screenshots from a film. 
+Example4:
+Visual Audit Summary: /n1. Subjects: Two female individuals with light blonde hair. The woman on the left exhibits a contrasting lack of concern for social etiquette; she is hunched forward in a mustard shirt, gripping a large sandwich with both hands and forcing it into her wide-open mouth. In stark contrast, the woman on the right maintains a conventional social poise; she sits upright in a navy blue floral robe, smiling composedly at the camera while neatly holding her phone and sandwich. /n2. Text: 'There are two types of women...' in white sans-serif letters with a thick black outline at the bottom. /n3. Setting: A wooden bench in an outdoor park or wooded area with trees and sunlight in the background. /n4. Graphic Overlays: Impact-style digital text overlay. /n5. Image Medium: Digital photograph with text overlay in a comparative meme format.
 """
     evidence_judge_template = (
 """
-Generate a Concise Visual Data Audit. Start directly with "Visual Audit Summary:".
-1. **Subjects**: List individuals (Left to Right). Briefly state their physical appearance and clothing.
-2. **Text**: Transcribe all visible text verbatim. Note its position (e.g., "Bold white text at bottom").
-3. **Setting**: 1-sentence description of the background environment.
-4. **Graphic Overlays**: Identify any added symbols, logos, or digital edits.
-5. **Image Medium**: Define the format (e.g., "Photograph with digital text overlay").
-**Constraint**: Keep the entire response under 800 words. No warnings or preambles."""
+Give the discription of the Image I provide to you: 
+"""
     )
     llm_tool = LLMTool(model_name=MODEL_NAME, temperature=1.0)
     fact_judge_response = llm_tool.call_llm(

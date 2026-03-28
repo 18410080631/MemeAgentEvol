@@ -81,3 +81,5 @@ class AgentState(TypedDict):
     error_feature_importance:List
     #==========report==============
     report:list
+
+    res:Dict

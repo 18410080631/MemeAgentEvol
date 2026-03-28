@@ -1,0 +1,77 @@
+Conduct a comprehensive evaluation of the provided meme, focusing on the contextual implications and nuanced meanings to ascertain its potential harmfulness or harmlessness. Adhere strictly to the revised classification criteria detailed below:
+
+### Criteria for Identifying Harmful Memes:
+A meme is deemed harmful if it aligns with any of the following criteria:
+
+*H1*: **Direct Discrimination Against Specific Groups**:  
+Scrutinize the content—both visuals and text—for overt discrimination against individuals based on:  
+1. Race, ethnicity, or nationality  
+2. Immigration status  
+3. Religion  
+4. Gender identity or sexual orientation  
+5. Disability or health condition  
+*Note*: Make clear distinctions between genuine discrimination and critiques that do not single out protected characteristics.
+
+*H2*: **Nature of Harmful Behavior**:  
+Assess whether the meme exhibits any of these characteristics:  
+1. Dehumanizing objects or groups by likening them to non-human entities.  
+2. Suggesting inherent inferiority or threat posed by a specific demographic.  
+3. Promoting exclusion or harmful segregation based on identity.  
+4. Minimizing the seriousness of hate crimes or discriminatory acts against marginalized groups.  
+
+*H3*: **Combined Impact of Image and Text**:  
+1. Harmful intent must arise from the interaction of images and text.  
+2. A neutral image by itself should lead to a harmless classification.  
+3. Altering or removing textual components must mitigate harmful interpretations.  
+4. Persistent harm from the combination of image and text warrants a harmful categorization.
+
+### Criteria for Identifying Harmless Memes:
+A meme may be classified as harmless if it meets any of the following criteria:
+
+*N1*: **Absence of Targeting Specific Groups**:  
+The meme fails to target any demographic segment based on recognized characteristics.
+
+*N2*: **Contextual Exceptions**:  
+1. Offers humorous critiques of individuals outside protected categories.  
+2. Analyzes groups espousing hatred without actual harm.  
+
+*N3*: **Absence of Genuine Malicious Intent**:  
+1. Text does not convey harmful implications.  
+2. The image alone must not suggest harm.  
+3. The interaction of combined elements should not imply harm.
+
+*N4*: **Neutral or Descriptive Visuals**:  
+Content that neutrally represents scenarios or employs irony without targeting any groups is classified as harmless.
+
+### Evaluation Guidelines:
+1. Avoid basing judgments solely on individual words or phrases.  
+2. Contextual analysis is critical—delve into meanings beyond superficial interpretations.  
+3. Test hypothetical alterations in text or imagery to gauge their impact on classification.  
+4. Be attentive to subtle indicators of harm: “Is the meme focused on identity factors rather than behavior or ideologies?”
+
+### Scoring Instructions (Mandatory):
+Assign specific scores to the meme according to the outlined criteria, utilizing a scale from **1 to 9** for each dimension:
+
+- **Harmful Dimension Scores**:  
+  - H1:  
+  - H2:  
+  - H3:  
+
+- **Harmless Dimension Scores**:  
+  - N1:  
+  - N2:  
+  - N3:  
+  - N4:  
+
+### Scoring Directives (Essential):
+Concentrate solely on the scoring criteria without forming an overall classification judgment.  
+- Utilize the full scoring range of 1 to 9 for each dimension.  
+- A high score in H1 does not necessitate high scores in H2 or H3.  
+- Justify how your scores informed your evaluation, providing explicit reasoning for your assessments.
+
+Ensure your analysis is delivered in the exact JSON format specified:  
+{
+  "harmful_scores": {"H1": int, "H2": int, "H3": int},  
+  "harmless_scores": {"N1": int, "N2": int, "N3": int, "N4": int},  
+  "reasoning": "string"  
+}

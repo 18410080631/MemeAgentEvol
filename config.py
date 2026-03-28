@@ -68,66 +68,7 @@ Note that your role is not to judge whether the meme is harmful or harmless, but
 Do not output anything outside the JSON block.
 """
 
-TASK_HARM_J_H = """
-You are an expert evaluator tasked with scoring a meme along six predefined dimensions based on the HarMeme annotation guidelines (ACL-IJCNLP 2021). Your role is **NOT** to output a final 'harmful' or 'harmless' label, but to assign a score from 1 to 9 for each dimension, where 1 = completely absent and 9 = fully and clearly present.
-**Critical Instructions Before Scoring:**
-1. **Distinguish Sarcasm vs. Satire (CRITICAL)**
-   - **Sarcasm**: "Praise that is actually an insult; generally involves malice, the desire to put someone down"  
-     (e.g., calling a specific person "the village idiot")
-   - **Satire**: "Ironical exposure of the vices or follies of an individual, group, or institution, usually with the aim of correcting it"
-   - **Sarcasm targeting specific individuals is HARMFUL**; **satire using fictional/exaggerated elements is generally HARMLESS**
-2. **H2.5 Exception – Applies ONLY when ALL conditions are met:**
-   - The content uses **fictional, surreal, hyperbolic, or cartoonish exaggeration**  
-     (e.g., depicting a person as a monster, alien, or zombie)
-   - The meme makes **NO factual or pseudo-factual claims** about the target  
-     (e.g., "this is what Trump actually looks like")
-   - The content **does not directly label the target with derogatory terms**  
-     (e.g., "idiot," "liar")
-   - The exaggeration is **clearly fantastical** and not presented as reality
-   - The meme **does not promote real-world stigma or conspiracy theories**  
-   → If **ANY** condition fails, **H2.5 does NOT apply**
-3. **Targeting Specific Individuals:**
-   - Using a real person's image with a derogatory label (e.g., "village idiot") = **DIRECT TARGETING** (H1 high)
-   - Using a real person's image with fictional transformation (e.g., "will become a monster") = **INDIRECT TARGETING** (H1 moderate)
-   - Using a real person's image for general commentary without derogatory labels = **POTENTIALLY HARMLESS**
-4. **Context Matters:**
-   - Ask: *"Is this meme asserting something as factual about the target, or is it clearly fantastical humor?"*
-   - Ask: *"Could a reasonable person interpret this as directly demeaning a specific individual?"*
-**Scoring Dimensions:**
-**Harmful Criteria:**
-- **H1: Targeted Entity Existence**  
-  Score high if the meme explicitly/implicitly targets a specific real individual with derogatory language or factual claims.
-- **H2: Form of Harm**  
-  Score high if it causes defamation, emotional disturbance, or promotes real conspiracies.  
-  ⚠️ **Apply H2.5 strictly**: Only score H2 ≤ 4 if **ALL H2.5 conditions are met**.
-- **H3: Multimodal Nature of Harm**  
-  Score high if harm depends on **BOTH image and text working together**.
-**Harmless Criteria:**
-- **N1: No Targeted Entity**  
-  Score high **ONLY** if no real social entity is identifiable or targeted with derogatory language.
-- **N2: Rejection Criteria Met**  
-  Score high **only** if the meme is non-English, unreadable, unimodal, or hand-drawn cartoon.
-- **N3: Harm is Absent or Negligible**  
-  Score high **ONLY** if:
-    - The content is clearly fantastical/surreal with **NO factual claims**, **OR**
-    - It critiques general behavior without naming/depicting specific individuals with derogatory terms.  
-  → **If a real person is depicted AND labeled with a derogatory term (e.g., "idiot"), N3 ≤ 3.**  
-  → **If a real person is depicted but transformed FANTASTICALLY with NO derogatory labels, N3 ≥ 6.**
-**Output Format (STRICT JSON):**
-{
-  "harmful_scores": {
-    "H1": int,
-    "H2": int,
-    "H3": int
-  },
-  "harmless_scores": {
-    "N1": int,
-    "N2": int,
-    "N3": int
-  },
-  "reasoning": "Concise explanation distinguishing between sarcasm (harmful) and satire (harmless), explaining H2.5 applicability, and why N3 score is appropriate for this specific meme."
-}
-"""
+TASK_HARM_J_H = """You are tasked with evaluating a meme based on **seven specific metrics** that adhere to enhanced HarMeme annotation guidelines. The evaluation must yield a score from 1 to 9 for each metric—where 1 indicates a complete absence and 9 indicates a strong presence of the assessed attribute. You must avoid binary classifications of 'harmful' or 'harmless.'\n\n**Mandatory Evaluation Instructions:**  \n1. **Distinguish Between Sarcasm and Satire (CRITICAL)**  \n   - **Sarcasm**: Often harmful; it can belittle while masquerading as praise.  \n   - **Satire**: Constructive humor critiquing social issues, intended to spark thought rather than harm.  \n   It is critical to recognize that sarcasm targeting individuals is deemed HARMFUL, while exaggerated satire is often perceived as HARMLESS.\n\n2. **Assess Contextual Claims**:  \n   - Consider: *\"Does the meme present genuine claims regarding its subject matter, or is it humorously absurd?\"*  \n   - Evaluate whether the content could be interpreted as directly insulting to any individual or group.\n\n**Scoring Metrics:**  \n**Harmful Metrics:**  \n- **H1: Evaluating Implicit Targeting**  \n  Assess if the meme suggests negativity towards specific individuals or populations, being mindful of both explicit content and any covert aggressive undertones that humor may conceal. Contextual understanding is crucial.\n\n- **H2: Thorough Harm Assessment**  \n  Determine if the meme has the capacity to induce emotional distress, defame individuals, or misrepresent narratives with harmful societal implications. Focus on psychological and emotional effects, particularly concerning marginalized individuals or groups.\n\n- **H3: Cultural Sensitivity Evaluation**  \n  Analyze whether the meme respects cultural nuances, especially in sensitive contexts like public health or social issues, to mitigate potential misinterpretation or harm.\n\n**Harmless Metrics:**  \n- **N1: Non-Targeted Humor Assessment**  \n  Ensure the meme does not negatively target identifiable individuals or communities, emphasizing the positive intent of humor.\n\n- **N2: Positive Humor Intent**  \n  Determine if the humor is light-hearted, self-deprecating, or free of malicious undertones—elements that enhance perceived harmlessness.\n\n- **N3: Social Impact and Positive Engagement**  \n  Evaluate how the humor positively influences social behavior, focusing on its long-term societal effects rather than just its humorous aspect.\n\n- **N4: Elements of Fantasy or Absurdity**  \n  Score higher when the meme features fantastical or surreal elements, suggesting negligible real-world consequences, thereby improving its harmless rating.\n\n- **N5: Clarity and Readability**  \n  Assess if the meme’s content is clear, accessible, and positively impactful to a general audience.\n\n**Output Format (STRICT JSON):**  \n{\n  \"harmful_scores\": {\n    \"H1\": int,\n    \"H2\": int,\n    \"H3\": int\n  },\n  \"harmless_scores\": {\n    \"N1\": int,\n    \"N2\": int,\n    \"N3\": int,\n    \"N4\": int,\n    \"N5\": int\n  },\n  \"reasoning\": \"Provide a clear distinction between sarcasm and satire, justify the scores for each metric, and address cultural sensitivities while ensuring independence among scoring dimensions.\"\n}"""
 
 
 TASK_MAMI_J_H = """
@@ -209,11 +150,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-nXhyMEwSWPyCh94GBeXr6kdeIsbP2eu
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.chatanywhere.tech/v1")  # https://api.chatanywhere.tech/v1
 MODEL_NAME = 'gpt-4o-mini'  # gpt-4o-mini
 MAX_ITERATIONS: Final[int] = 8
-DATASET_NAME = "HARM"  # Options: "FHM", "MAMI", "HARM"
+DATASET_NAME = "MAMI"  # Options: "FHM", "MAMI", "HARM"
 RECORD_PATH = "records.md"
 DATASET_NUM = 40
-THRESHOLD = 0.95
+THRESHOLD = 0.98
 error_focus_threshold = 0.2
 dim_importance_threshold = 0.1
 USE_LMCL = True
-USE_DMEE = True
+USE_DMEE = False
+USE_DEEP = False
+USE_ERROR_REF = True

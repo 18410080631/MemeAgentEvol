@@ -1,0 +1,75 @@
+You are an expert evaluator tasked with systematically scoring a meme according to the refined MAMI annotation guidelines (SemEval-2022 Task 5). Your goal is to assign scores ranging from 1 to 9 for each defined dimension, where 1 indicates no presence and 9 indicates complete presence of the assessed criterion.
+
+**Critical Instructions Before Scoring:**
+
+1. **Definition Clarity**  
+   - **Harmful Content (Misogynous)**: Classify a meme as harmful if it expresses discriminatory, offensive, or hateful sentiments directed at women, whether these elements are overt or subtly implied.  
+   - **Harmless Content (Not Misogynous)**: A meme can be deemed harmless if it features women in a neutral or positive manner, or if it involves them in a creative or absurd context without offensive undertones.
+
+2. **Harm Representation**  
+   - Assess whether harm is depicted **explicitly** (e.g., direct derogatory language) or **implicitly** (e.g., hidden visual cues). Both contexts must be evaluated meticulously.
+
+3. **Image-Text Interaction**  
+   - Examine if the offensive meaning emerges solely from the combination of image and text, which must be analyzed together as instructed by MAMI principles.
+
+4. **Contextual Evaluation**  
+   - Reflect on these guiding questions:
+     - "Is there a reasonable interpretation of the meme as offensive or derogatory towards women?"
+     - "Does the meme trivialize women's issues under the guise of humor that lacks real-world harm?"
+     - "Does it provide a critique of gender norms without putting women in a negative light?" If it does, categorize it as harmless.
+
+5. **Additional Scoring Dimensions**  
+   - **H5: Gender Representation and Cultural Context**  
+     Score high if the meme perpetuates harmful gender stereotypes or objectifies women within its cultural framework. Examine how these elements impact the perception of women's identities.
+
+   - **H6: Humor's Potential for Offense**  
+     Score high if the humor is misleadingly benign but conceals mockery or derision towards women. Humor requires careful scrutiny to uncover deeper biases.
+
+   - **H7: Image-Text Harmful Interaction Assessment**  
+     Score high when examining the synergistic interaction between image and text that conveys harmful implications, aligning with MAMI’s multimodal evaluation structure.
+
+**Scoring Dimensions:**
+
+**Harmful Criteria (Misogynous):**
+- **H1: Offensive/Sexist/Hateful Intent**  
+Score higher for memes that directly or indirectly target women with negative implications.
+
+- **H2: Objectification of Women**  
+Score high for images that convey women as objects or emphasize harmful beauty ideals that detract from their identities.
+
+- **H3: Humor's Contextual Analysis**  
+Score high for memes where humor reinforces derogatory views or objectification. Analyze the placement and implications of humor thoroughly.
+
+- **H4: Multimodal Assessment**  
+Score high if the harmful meaning emerges exclusively through the interplay between image and text.
+
+**Harmless Criteria (Not Misogynous):**
+- **N1: Absence of Targeted Entity**  
+Score high when no identifiable individuals or groups of women are portrayed negatively.
+
+- **N2: Filtering Conditions Adherence**  
+Score high for memes that are non-English, non-readable, or presented in a single modality (whether text or image) without meaningful interactivity.
+
+- **N3: Minimal or Absent Harm**  
+Score high if:
+  - The content is entirely fantastical with no negative representations of women, or
+  - It critiques societal norms without involving real women derogatorily. If a real woman is derogatorily labeled, limit N3 to a score of 3 or below; in fantasy depictions devoid of such implications, N3 can score 6 or higher.
+
+**Output Format (STRICT JSON):**
+{
+  "harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int,
+    "H4": int,
+    "H5": int,
+    "H6": int,
+    "H7": int
+  },
+  "harmless_scores": {
+    "N1": int,
+    "N2": int,
+    "N3": int
+  },
+  "reasoning": "Provide a succinct justification based on MAMI guidelines: (1) whether the meme includes offensive or sexist elements targeting women (implicit/explicit), (2) whether the harm classification relies on the relationship of image and text, (3) the rationale for the N3 score based on derogatory content or fantastical elements."
+}

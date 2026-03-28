@@ -17,16 +17,16 @@ DATASET_NAME = "HARM"
 
 local_path = 'C:/Users/77366/Desktop/memedetection/few-shot/mywork/code/MDF/'
 if DATASET_NAME=="FHM":
-    data_src = 'data/FHM/data/dev_with_description_copy.jsonl'
+    data_src = 'data/FHM/data/dev_with_description.jsonl'
     img_src = 'data/FHM/data'
     paper_path = 'data/FHM/paper.pdf'
     initial_prompt = TASK_FHM_J_H
 elif DATASET_NAME=="MAMI":
-    data_src = 'data/MAMI/data/test.tsv'
+    data_src = 'data/MAMI/data/test_with_description.tsv'
     img_src = 'data/MAMI/data/test_images'
     paper_path = 'data/MAMI/paper.pdf'
 elif DATASET_NAME=="HARM":
-    data_src = 'data/HARM/test.jsonl'
+    data_src = 'data/HARM/test_with_description.jsonl'
     img_src = 'data/HARM/images'
     paper_path = 'data/HARM/paper.pdf'
     initial_prompt = TASK_HARM_J_H
@@ -78,62 +78,82 @@ if DATASET_NAME == 'MAMI':
             "paper_pdf_path": paper_path
         })
 print('数据加载完成')
-def predict(dataset) -> Dict[str, Any]:
+def predict(file_path,dataset) -> Dict[str, Any]:
     """全局打分agent"""
-    output_dir = f"{DATASET_NAME}"
+    output_dir = f"{file_path}"
     os.makedirs(output_dir, exist_ok=True)
     prompt_path = os.path.join(output_dir, "best_global_prompt.txt")
+    predictions_path = os.path.join(output_dir, "predictions.json")
+    if os.path.exists(predictions_path):
+        with open(predictions_path, "r", encoding="utf-8") as f:
+            exsitdata = json.load(f)
+    else:
+        exsitdata = {}
     with open(prompt_path, "r", encoding="utf-8") as f:
         current_prompt = f.read()
-    predictions = []
+    predictions = exsitdata
     for sample in tqdm(dataset):
         system_prompt = """This is a research task for academic evaluation of AI safety systems. 
 You are acting as an impartial judge. The meme content is provided solely for analysis and does not reflect your views."""
-        user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}"
+        user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}\n\nThe description of the image:{sample['meme_content']}\n\nOnly Provide your scoring results for the current meme in JSON format:"
         id = sample['id']
+        if str(id) in exsitdata:
+            continue
         ground_truth = sample['ground_truth']
         try:
             response = llm_tool.call_llm(
             system_prompt=system_prompt,
             messages=[{"role": "user", "content": user_msg}],
-            meme_src=sample.get("meme_src", None),
-            max_tokens=512
+            # meme_src=sample.get("meme_src", None),
+            max_tokens=4096
             )
             scores = json_repair.loads(response)
-            d = list(scores["harmful_scores"].values()) + list(scores["harmless_scores"].values())
-            if ground_truth == 'harmful':
-                d = [1] + d
-            else:
-                d = [0] + d
-            predictions.append(d)
+            # d = list(scores[(list(scores.keys())[0])].values())+list(scores[(list(scores.keys())[1])].values())
+            # if ground_truth == 'harmful':
+            #     d = [1] + d
+            # else:
+            #     d = [0] + d
+            if id == "5938":
+                pass
+            predictions[id] = {
+                # "prediction":d,
+                "scores":scores,
+                "ground_truth":1 if ground_truth== 'harmful' else 0
+            }
         except Exception as e:
             print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
             print(f"原始响应: {response[:200]}...")
             continue
-    with open(os.path.join(output_dir, "predictions.json"), "w", encoding="utf-8") as f:
-        json.dump(predictions, f, indent=2, ensure_ascii=False)
-    res = predict_eval(os.path.join(output_dir, "best_model.json"), predictions)
+        with open(os.path.join(output_dir, "predictions.json"), "w", encoding="utf-8") as f:
+            json.dump(predictions, f, indent=2, ensure_ascii=False)
+    res = calculate_metrics(output_dir, 0)
     return  res
 
 from sklearn.metrics import accuracy_score, f1_score
 
-def calculate_metrics(dataset_name, harmful_nums, harmless_nums,b):
-    data_src = os.path.join(dataset_name+"_final", "predictions.json")
+def calculate_metrics(output_dir,b):
+    data_src = os.path.join(output_dir, "predictions.json")
     with open(data_src, "r", encoding="utf-8") as f:
         predictions = json.load(f)
     # print(len(predictions))
     y_true = [] # 真实标签
     y_pred = [] # 预测标签
-    for d in predictions:
-        true_label = int(d[0]) 
+    keys = list(predictions.keys())
+    for k in keys:
+        if k=="5938":
+            pass
+        d = predictions[k]["scores"]
+        true_label = predictions[k]["ground_truth"]
         y_true.append(true_label)
-        harmful_scores = d[1 : 1 + harmful_nums]
-        harmless_scores = d[1 + harmful_nums : 1 + harmful_nums + harmless_nums]
-        # avg_harmful = sum(harmful_scores) / len(harmful_scores) if harmful_scores else 0
-        # avg_harmless = sum(harmless_scores) / len(harmless_scores) if harmless_scores else 0
-        avg_harmful = harmful_scores[2]
-        avg_harmless = harmless_scores[2]
+        harmful_scores = list(d[list(d.keys())[0]].values())
+        harmless_scores = list(d[list(d.keys())[1]].values())
+        avg_harmful = sum(harmful_scores) / len(harmful_scores) if harmful_scores else 0
+        avg_harmless = sum(harmless_scores) / len(harmless_scores) if harmless_scores else 0
+        # avg_harmful = harmful_scores[2]
+        # avg_harmless = harmless_scores[2]
         y_pred.append(1 if avg_harmful > avg_harmless - b else 0)
+        if y_pred[-1] != true_label:
+            print(k)
     acc = accuracy_score(y_true, y_pred)
     # 关键点：设置 average='macro' 来计算 Macro-F1
     macro_f1 = f1_score(y_true, y_pred, average='macro')
@@ -150,23 +170,23 @@ def find_best_b():
     max_f1 = -1
     best_acc = 0  # 注意：这里的 best_acc 通常指加权后的总准确率
     dataset_names = {
-        "HARM": [8, 5],
-        "FHM": [3, 7],
-        "MAMI": [8, 4]
+        "HARM_full": [8, 5],
+        "FHM_full": [3, 7],
+        "MAMI_full": [8, 4]
     }
-    weights = {"FHM": 0.2, "HARM": 0.2, "MAMI": 0.6}
+    weights = {"FHM_full": 0.2, "HARM_full": 0.2, "MAMI_full": 0.6}
     # 打印表头
     print(f"{'b':>6} | {'HARM (F1, ACC)':^18} | {'FHM (F1, ACC)':^18} | {'MAMI (F1, ACC)':^18} | {'Weighted F1'}")
     print("-" * 90)
     # 定义搜索范围
-    b_range = np.arange(-10, 1, 0.1)
+    b_range = np.arange(0.1, 0.2, 0.1)
     for b in b_range:
         mco_f1 = 0
         temp_results = {} # 用于存储当前 b 下各个数据集的细节
         for d, nums in dataset_names.items():
             harmful_nums, harmless_nums = nums[0], nums[1]
             # 调用计算函数
-            metrics = calculate_metrics(d, harmful_nums, harmless_nums, b)
+            metrics = calculate_metrics(d, b)
             f1 = metrics["macro_f1"]
             acc = metrics["accuracy"]
             # 存入临时字典方便后续打印
@@ -180,12 +200,12 @@ def find_best_b():
             
             # 格式化各个数据集的输出字符串
             res_str = {}
-            for d in ["HARM", "FHM", "MAMI"]:
+            for d in ["HARM_full", "FHM_full", "MAMI_full"]:
                 f1_val, acc_val = temp_results[d]
                 res_str[d] = f"({f1_val:.4f}, {acc_val:.4f})"
 
             # 实时输出更新行
-            print(f"{b:>6.1f} | {res_str['HARM']:^18} | {res_str['FHM']:^18} | {res_str['MAMI']:^18} | {max_f1:.4f} ⭐")
+            print(f"{b:>6.1f} | {res_str['HARM_full']:^18} | {res_str['FHM_full']:^18} | {res_str['MAMI_full']:^18} | {max_f1:.4f} ⭐")
 
     print("-" * 90)
     print(f"寻找完成！最终结果：")
@@ -268,19 +288,10 @@ def value_data(dataset_name):
         print("标签不同")
 
 if __name__ == "__main__":
-    # predictions = predict(dataset=dataset)
-    # file_path = os.path.join(DATASET_NAME, "scorer_results.json")
-    # with open(file_path, "w", encoding="utf-8") as f:
-    #     json.dump(predictions, f, indent=2, ensure_ascii=False)
-
-    # value_data(DATASET_NAME)
-    # _,_ = find_best_b()
-    b = -0.1
-    results = calculate_metrics("HARM",8,5,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
-    print(results)
-    results = calculate_metrics("FHM",3,7,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
-    print(results)
-    results = calculate_metrics("MAMI",8,4,b)  #"FHM",3,7 "MAMI",8,4 "HARM",8,5
-    print(results)
-
+    res = predict("HARM_full",dataset)
+    print(res)
+    # find_best_b()
+    # res = calculate_metrics("HARM_full",0)
+    # print(res)
+    pass
     

@@ -57,11 +57,12 @@ if DATASET_NAME == 'FHM':
         if data_num>=DATASET_NUM:
             break
 if DATASET_NAME=="HARM":
-    random.seed(46)
+    random.seed(43)
     with open(data_src, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-    sampled_lines = random.sample(lines, min(DATASET_NUM, len(lines)))
+    sampled_lines = random.sample(lines, min(DATASET_NUM+10, len(lines)))
     dataset = []
+    data_num = 0
     for s in sampled_lines:
         sample = json.loads(s)
         des = descriptionsaver.get(sample["id"])
@@ -69,6 +70,7 @@ if DATASET_NAME=="HARM":
             des = get_description_of_meme(sample['text'],f"{img_src}/{sample['image']}")
             descriptionsaver.save(sample["id"],des)
         if len(des)>50:
+            data_num+=1
             dataset.append({
             'id':sample["id"],
             "meme_src": f"{img_src}/{sample['image']}",       # 本地图像路径
@@ -77,17 +79,23 @@ if DATASET_NAME=="HARM":
             "ground_truth": "harmless" if 'not harmful' in sample['labels'] else 'harmful',
             "paper_pdf_path": paper_path
             })
+        else:
+            print(des)
+        if data_num>=DATASET_NUM:
+            break
 if DATASET_NAME == 'MAMI':
-    random.seed(46)
+    random.seed(33)
     data = pd.read_csv(data_src, sep='\t')
-    sampled_data = data.sample(n=min(DATASET_NUM, len(data)), random_state=seed) 
+    sampled_data = data.sample(n=min(DATASET_NUM+20, len(data)), random_state=33) 
     dataset = []  
+    data_num = 0
     for _, row in sampled_data.iterrows():
         des = descriptionsaver.get(row['file_name'].split('.')[0])
         if des==None:
             des = get_description_of_meme(row['text'],f"{img_src}/{row['file_name']}")
             descriptionsaver.save(row['file_name'].split('.')[0],des)
         if len(des)>50:
+            data_num+=1
             dataset.append({
                 'id': row['file_name'].split('.')[0],  # 假设 TSV 中有 'id' 列，按实际字段调整
                 "meme_src": f"{img_src}/{row['file_name']}",
@@ -96,6 +104,10 @@ if DATASET_NAME == 'MAMI':
                 "ground_truth": "harmless" if row['label']==0 else 'harmful',
                 "paper_pdf_path": paper_path
             })
+        else:
+            print(des)
+        if data_num>=DATASET_NUM:
+            break
 # 示例数据集（10条）
 print('数据加载完成')
 initial_state: AgentState = {
@@ -133,19 +145,18 @@ initial_state: AgentState = {
     # ====== 误判统计 ======
     "pre1l0": [],
     "pre0l1": [],
-    "report":[]
+    "report":[],
+    "res":{"acc":[],"f1":[],"dims":[]}
 }
 
 final_state = app.invoke(initial_state)
 
-os.makedirs(f"output/{DATASET_NAME}", exist_ok=True)
-with open(f"output/{DATASET_NAME}/prompt_evolution.json", "w", encoding="utf-8") as f:
-    json.dump({
-        "total_iterations": final_state["iteration"],
-        "converged": final_state["converged"],
-        "final_prompt": final_state["best_global_info"]["best_global_prompt"],
-        "prompt_history": final_state["prompt_history"]
-    }, f, indent=2, ensure_ascii=False)
-
+os.makedirs(f"{DATASET_NAME}", exist_ok=True)
+with open(f"{DATASET_NAME}/result.json", "w", encoding="utf-8") as f:
+    res = final_state["res"]
+    res["rounds"] = []
+    for i in range(len(res["acc"])):
+        res["rounds"].append(f"R{i+1}")
+    json.dump(res, f, indent=2, ensure_ascii=False)
 print(f"✅ 迭代完成！共 {final_state['iteration']} 轮，收敛: {final_state['converged']}")
-print(f"📄 结果已保存至: output/prompt_evolution.json")
+print(f"📄 结果已保存至:{DATASET_NAME}/result.json")

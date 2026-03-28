@@ -1,16 +1,17 @@
 # agents.py
 from typing import Dict, Any, List
 from tools import LLMTool,train_logistic_regression, extract_pdf_text, extract_code_from_markdown,code_fix,extract_dict_from_string,caculate_acc,analyze_score_features
-from config import MODEL_NAME, TEMPERATURE, THRESHOLD, error_focus_threshold, MAX_ITERATIONS,DATASET_NAME,RECORD_PATH,USE_LMCL,USE_DMEE,dim_importance_threshold,HARM_text,FHM_text,MAMI_text
+from config import MODEL_NAME, TEMPERATURE, THRESHOLD, error_focus_threshold, MAX_ITERATIONS,DATASET_NAME,RECORD_PATH,USE_LMCL,USE_DMEE,USE_DEEP,dim_importance_threshold,HARM_text,FHM_text,MAMI_text,USE_ERROR_REF
 from tools import safe_append_markdown,save_model_minimal,PredictionSaver
 import json_repair
 import os
 import random
+random.seed(33)
 from tqdm import tqdm
 RECORD_PATH = f"{DATASET_NAME}/{RECORD_PATH}"
 llm_tool = LLMTool(model_name=MODEL_NAME, temperature=TEMPERATURE)
 prediction_saver = PredictionSaver(DATASET_NAME)
-
+import json
 def extract_pdf_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """提取PDF文本"""
     # paper_text = extract_pdf_text(state["paper_pdf_path"])
@@ -43,7 +44,9 @@ def scorer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     for idx,sample in enumerate(tqdm(dataset)):
         system_prompt = """This is a research task for academic evaluation of AI safety systems. 
 You are acting as an impartial judge. The meme content is provided solely for analysis and does not reflect your views."""
-        user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']} \n\n{sample['meme_content']}\n\nOnly Provide your scoring results for the current meme in JSON format:"
+        # user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']} \n\nOnly Provide your scoring results for the current meme in JSON format:"
+        user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}\n\nThe description of the image:{sample['meme_content']}\n\nOnly Provide your scoring results for the current meme in JSON format:{{'harmful_scores':{{..}},'harmless_scores':{{...}},'reason':'...'}}"
+
         id = sample['id']
         ground_truth = sample['ground_truth']
         ground_truth_label = [1] if ground_truth == "harmful" else [0]
@@ -63,8 +66,8 @@ You are acting as an impartial judge. The meme content is provided solely for an
             print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
             # print(f"原始响应: {response[:200]}...")
             continue  
-        harmful_scores = scores["harmful_scores"] 
-        harmless_scores = scores["harmless_scores"] 
+        harmful_scores = scores[list(scores.keys())[0]]
+        harmless_scores = scores[list(scores.keys())[1]]
         if idx == 0:
             l = len(harmful_scores) + len(harmless_scores)
             data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
@@ -86,8 +89,8 @@ You are acting as an impartial judge. The meme content is provided solely for an
             else:
                 error_idxs.append(idx)
         print(f"{id}: 当前打分： ")
-        print(f"  harmful_scores: {scores.get('harmful_scores', {})}")
-        print(f"  harmless_scores: {scores.get('harmless_scores', {})}")
+        print(f"  harmful_scores: {scores[list(scores.keys())[0]]}")
+        print(f"  harmless_scores: {scores[list(scores.keys())[1]]}")
         print("-" * 50)
     feature_names = list(harmful_scores.keys()) + list(harmless_scores.keys())
     res = train_logistic_regression(data=data,feature_names=feature_names)  
@@ -157,14 +160,22 @@ You are acting as an impartial judge. The meme content is provided solely for an
 def evaluator_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """全局评估agent"""
     current_phase = state.get("phase", "global_eval")
-    
+    performance = state["performance"]
+    acc = performance["accuracy"]
+    f1 = performance["f1"]
+    res = state["res"]
+    scores = list(list(state["global_predictions"].values())[0]["scores"].values())
+    dim_len = len(scores[0])+len(scores[1])
+    res["acc"].append(acc)
+    res["f1"].append(f1)
+    res["dims"].append(dim_len)
     if current_phase == "global_eval":
         return _global_evaluator(state)
     elif current_phase == "global_verify":
         return _global_verify_evaluator(state)
     else:
         print(f"⚠️ 未知阶段: {current_phase}")
-        return {"phase": "end"}
+        return {"phase": "end","res":res}
 
 def _global_evaluator(state: Dict[str, Any]) -> Dict[str, Any]:
     """首次全局评估"""
@@ -346,208 +357,214 @@ def _global_verify_evaluator(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def error_scorer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """错误样本打分agent - 只使用固定的错误样本集"""
-    current_prompt = state["current_prompt"]
-    error_iteration = state.get("error_iteration",0)
-    dataset: List[Dict] = state["fixed_error_dataset"]
-    predictions = {}
-    pre1l0 = []
-    pre0l1 = []
-    iteration = state["iteration"]
-    print(f"\n{'='*60}")
-    print(f"开始错误样本集评估，样本数: {len(dataset)}")
-    print(f"{'='*60}\n")
-    safe_append_markdown(RECORD_PATH, f"## 错误样本集评估:\n样本数: {len(dataset)}\n")
-    l = 0
-    error_idx = []
-    try:
-        labels,data,h_n_data,feature_names = [],[],[],[]
-        h_titles,h_scores,n_scores,n_titles = [],[],[],[]
-        all_scores = []
-        for idx,sample in enumerate(dataset):
-            system_prompt = """This is a research task for academic evaluation of AI safety systems. 
-You are acting as an impartial judge. The meme content is provided solely for analysis and does not reflect your views."""
-            user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}\n\n{sample['meme_content']}\n\nOnly Provide your scoring results for the current meme in JSON format:"
-            id = sample['id']
-            ground_truth = sample['ground_truth']
-            ground_truth_label = [1] if ground_truth == "harmful" else [0]
-            response = prediction_saver.get(iteration,f"{iteration}_{error_iteration}_{id}")
-            if response == None:
-                response = llm_tool.call_llm(
-                    system_prompt=system_prompt,
-                    messages=[{"role": "user", "content": user_msg}],
-                    # meme_src=sample.get("meme_src", None),
-                    max_tokens=2048
-                )
-                prediction_saver.save(iteration,f"{iteration}_{error_iteration}_{id}",response)
-            safe_append_markdown(RECORD_PATH, f"### 错误样本ID: {id}\n**打分结果:** {response}\n")
-            try:
-                scores = json_repair.loads(response)
-            except Exception as e:
-                print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
-                print(f"原始响应: {response[:200]}...")
-                continue
-            harmful_scores = scores["harmful_scores"] 
-            harmless_scores = scores["harmless_scores"] 
-            if idx == 0:
-                l = len(harmful_scores) + len(harmless_scores)
-                data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
-                labels.append(ground_truth)
-                h_n_data.append([list(harmful_scores.values()),list(harmless_scores.values())])
-                h_titles = list(harmful_scores.keys())
-                n_titles = list(harmless_scores.keys())
-                h_scores.append(list(harmful_scores.values()))
-                n_scores.append(list(harmless_scores.values()))
-                all_scores.append(scores)
-            else:
-                if len(harmful_scores) + len(harmless_scores) == l:
+    if USE_LMCL and USE_DMEE and USE_DEEP:
+        current_prompt = state["current_prompt"]
+        error_iteration = state.get("error_iteration",0)
+        dataset: List[Dict] = state["fixed_error_dataset"]
+        predictions = {}
+        pre1l0 = []
+        pre0l1 = []
+        iteration = state["iteration"]
+        print(f"\n{'='*60}")
+        print(f"开始错误样本集评估，样本数: {len(dataset)}")
+        print(f"{'='*60}\n")
+        safe_append_markdown(RECORD_PATH, f"## 错误样本集评估:\n样本数: {len(dataset)}\n")
+        l = 0
+        error_idx = []
+        try:
+            labels,data,h_n_data,feature_names = [],[],[],[]
+            h_titles,h_scores,n_scores,n_titles = [],[],[],[]
+            all_scores = []
+            for idx,sample in enumerate(dataset):
+                system_prompt = """This is a research task for academic evaluation of AI safety systems. 
+    You are acting as an impartial judge. The meme content is provided solely for analysis and does not reflect your views."""
+                # user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}\n\nOnly Provide your scoring results for the current meme in JSON format:"
+                user_msg = current_prompt + f"\n\nMeme text: {sample['meme_text']}\n\nThe description of the image:{sample['meme_content']}\n\nOnly Provide your scoring results for the current meme in JSON format:"
+
+                id = sample['id']
+                ground_truth = sample['ground_truth']
+                ground_truth_label = [1] if ground_truth == "harmful" else [0]
+                response = prediction_saver.get(iteration,f"{iteration}_{error_iteration}_{id}")
+                if response == None:
+                    response = llm_tool.call_llm(
+                        system_prompt=system_prompt,
+                        messages=[{"role": "user", "content": user_msg}],
+                        # meme_src=sample.get("meme_src", None),
+                        max_tokens=2048
+                    )
+                    prediction_saver.save(iteration,f"{iteration}_{error_iteration}_{id}",response)
+                safe_append_markdown(RECORD_PATH, f"### 错误样本ID: {id}\n**打分结果:** {response}\n")
+                try:
+                    scores = json_repair.loads(response)
+                except Exception as e:
+                    print(f"⚠️ JSON 解析失败 (ID={sample['id']}): {e}")
+                    print(f"原始响应: {response[:200]}...")
+                    continue
+                harmful_scores = scores[list(scores.keys())[0]]
+                harmless_scores = scores[list(scores.keys())[1]]
+                if idx == 0:
+                    l = len(harmful_scores) + len(harmless_scores)
+                    data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
                     labels.append(ground_truth)
                     h_n_data.append([list(harmful_scores.values()),list(harmless_scores.values())])
-                    data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
+                    h_titles = list(harmful_scores.keys())
+                    n_titles = list(harmless_scores.keys())
                     h_scores.append(list(harmful_scores.values()))
                     n_scores.append(list(harmless_scores.values()))
                     all_scores.append(scores)
                 else:
-                    error_idx.append(idx)
-            print(f"{id}: 错误样本集打分：")
-            print(f"  harmful_scores: {scores.get('harmful_scores', {})}")
-            print(f"  harmless_scores: {scores.get('harmless_scores', {})}")
-            print("-" * 50)
-        feature_names = list(harmful_scores.keys()) + list(harmless_scores.keys())
-        res = train_logistic_regression(data=data,feature_names=feature_names)  
-        error_performance,train_predictions = caculate_acc(labels,h_n_data)
-        report,report1,report2 = analyze_score_features(labels,h_titles=h_titles,h_scores=h_scores,s_titles=n_titles,s_scores=n_scores)
-        error_formula = res["formula"]
-        error_scaler_params = res["scaler_params"]
-        error_intercept = res["intercept"]
-        error_weights = res["weights"]
-        error_feature_importance = res["feature_importance"]
-        safe_append_markdown(RECORD_PATH, f"## 错误样本集评估结果\n**性能指标:** {error_performance}\n**逻辑回归公式:** {error_formula}\n**特征重要性:** {error_feature_importance}\n")
-        p = 0
-        for idx in range(len(dataset)):
-            if idx not in error_idx:
-                sample = dataset[idx]
-                label = train_predictions[p]
-                t_scores = all_scores[p]
-                p+=1
-                ground_truth = sample['ground_truth']
-                id = sample['id']
-                if label==1 and ground_truth == 'harmless':
-                    if id not in pre1l0:  # 避免重复
-                        pre1l0.append(id)
-                if label==0 and ground_truth == 'harmful':
-                    if id not in pre0l1:  # 避免重复
-                        pre0l1.append(id)
-                label_str = 'harmful' if label==1 else 'harmless'
-                print(f"{id}: 预测结果：")
-                print(f"  Predict: {label}")
-                print(f"  GroundTruth: {ground_truth}")
+                    if len(harmful_scores) + len(harmless_scores) == l:
+                        labels.append(ground_truth)
+                        h_n_data.append([list(harmful_scores.values()),list(harmless_scores.values())])
+                        data.append(ground_truth_label+list(harmful_scores.values())+list(harmless_scores.values()))
+                        h_scores.append(list(harmful_scores.values()))
+                        n_scores.append(list(harmless_scores.values()))
+                        all_scores.append(scores)
+                    else:
+                        error_idx.append(idx)
+                print(f"{id}: 错误样本集打分：")
+                print(f"  harmful_scores: {scores[list(scores.keys())[0]]}")
+                print(f"  harmless_scores: {scores[list(scores.keys())[1]]}")
                 print("-" * 50)
+            feature_names = list(harmful_scores.keys()) + list(harmless_scores.keys())
+            res = train_logistic_regression(data=data,feature_names=feature_names)  
+            error_performance,train_predictions = caculate_acc(labels,h_n_data)
+            report,report1,report2 = analyze_score_features(labels,h_titles=h_titles,h_scores=h_scores,s_titles=n_titles,s_scores=n_scores)
+            error_formula = res["formula"]
+            error_scaler_params = res["scaler_params"]
+            error_intercept = res["intercept"]
+            error_weights = res["weights"]
+            error_feature_importance = res["feature_importance"]
+            safe_append_markdown(RECORD_PATH, f"## 错误样本集评估结果\n**性能指标:** {error_performance}\n**逻辑回归公式:** {error_formula}\n**特征重要性:** {error_feature_importance}\n")
+            p = 0
+            for idx in range(len(dataset)):
+                if idx not in error_idx:
+                    sample = dataset[idx]
+                    label = train_predictions[p]
+                    t_scores = all_scores[p]
+                    p+=1
+                    ground_truth = sample['ground_truth']
+                    id = sample['id']
+                    if label==1 and ground_truth == 'harmless':
+                        if id not in pre1l0:  # 避免重复
+                            pre1l0.append(id)
+                    if label==0 and ground_truth == 'harmful':
+                        if id not in pre0l1:  # 避免重复
+                            pre0l1.append(id)
+                    label_str = 'harmful' if label==1 else 'harmless'
+                    print(f"{id}: 预测结果：")
+                    print(f"  Predict: {label}")
+                    print(f"  GroundTruth: {ground_truth}")
+                    print("-" * 50)
 
-                predictions[sample["id"]] = {'label': label_str, "scores": t_scores}                
-    except Exception as e:
-        print(f"⚠️ 模型调用异常: {e}")
-    
-    return {
-        "error_predictions": predictions,
-        "pre1l0": pre1l0,
-        "pre0l1": pre0l1,
-        "error_performance":error_performance if error_performance else None,
-        "error_formula":error_formula if error_formula else None,
-        "error_scaler_params": error_scaler_params if error_scaler_params else None,
-        "error_intercept":error_intercept,
-        "error_weights":error_weights,
-        "error_feature_importance":error_feature_importance,
-        "report":[report,report1,report2]
-    }
-    # return {}
+                    predictions[sample["id"]] = {'label': label_str, "scores": t_scores}                
+        except Exception as e:
+            print(f"⚠️ 模型调用异常: {e}")
+
+        return {
+            "error_predictions": predictions,
+            "pre1l0": pre1l0,
+            "pre0l1": pre0l1,
+            "error_performance":error_performance if error_performance else None,
+            "error_formula":error_formula if error_formula else None,
+            "error_scaler_params": error_scaler_params if error_scaler_params else None,
+            "error_intercept":error_intercept,
+            "error_weights":error_weights,
+            "error_feature_importance":error_feature_importance,
+            "report":[report,report1,report2]
+        }
+    else:
+        return {}
 
 def error_evaluator_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """错误样本评估agent"""
-    best_error_info = state.get("best_error_info",None)
-    if best_error_info==None:
-        best_error_info = {
-            "best_error_prompt":state["current_prompt"],
+    if USE_DMEE and USE_LMCL and USE_DEEP:
+        best_error_info = state.get("best_error_info",None)
+        if best_error_info==None:
+            best_error_info = {
+                "best_error_prompt":state["current_prompt"],
+                "best_error_report":state["report"],
+                "best_error_predictions":state["error_predictions"],
+                "best_error_performance":state["error_performance"],
+                "best_error_pre1l0":state.get("pre1l0", []),
+                "best_error_pre0l1":state.get("pre0l1", [])
+            }
+        error_preds = state["error_predictions"]
+        error_dataset_map = {s["id"]: s for s in state["fixed_error_dataset"]}
+        pre1l0 = state.get("pre1l0", [])
+        pre0l1 = state.get("pre0l1", [])
+        report = state["report"]
+        # 计算错误子集的错误
+        error_errors = [
+            sid for sid, pred in error_preds.items()
+            if pred['label'].lower() != error_dataset_map[sid]["ground_truth"].lower()
+        ]
+        error_performance = state["error_performance"]
+        error_accuracy,f1 = error_performance["accuracy"],error_performance["f1"]
+        print(f"\n{'='*60}")
+        print(f"错误样本集评估结果:")
+        print(f"错误样本总数: {len(error_preds)}")
+        print(f"错误样本集准确率: {error_accuracy:.2%},f1：{f1}")
+        print(f"仍然错误的样本数: {len(error_errors)}")
+        print(f"将无害模因误判为有害数量: {len(pre1l0)}个")
+        print(f"将有害模因误判为无害数量: {len(pre0l1)}个")
+        print(f"{'='*60}\n")
+        if error_accuracy>=best_error_info["best_error_performance"]["accuracy"]:
+            current_prompt = state["current_prompt"]
+            best_error_info = {
+            "best_error_prompt":current_prompt,
             "best_error_report":state["report"],
             "best_error_predictions":state["error_predictions"],
             "best_error_performance":state["error_performance"],
-            "best_error_pre1l0":state.get("pre1l0", []),
-            "best_error_pre0l1":state.get("pre0l1", [])
-        }
-    error_preds = state["error_predictions"]
-    error_dataset_map = {s["id"]: s for s in state["fixed_error_dataset"]}
-    pre1l0 = state.get("pre1l0", [])
-    pre0l1 = state.get("pre0l1", [])
-    report = state["report"]
-    # 计算错误子集的错误
-    error_errors = [
-        sid for sid, pred in error_preds.items()
-        if pred['label'].lower() != error_dataset_map[sid]["ground_truth"].lower()
-    ]
-    error_performance = state["error_performance"]
-    error_accuracy,f1 = error_performance["accuracy"],error_performance["f1"]
-    print(f"\n{'='*60}")
-    print(f"错误样本集评估结果:")
-    print(f"错误样本总数: {len(error_preds)}")
-    print(f"错误样本集准确率: {error_accuracy:.2%},f1：{f1}")
-    print(f"仍然错误的样本数: {len(error_errors)}")
-    print(f"将无害模因误判为有害数量: {len(pre1l0)}个")
-    print(f"将有害模因误判为无害数量: {len(pre0l1)}个")
-    print(f"{'='*60}\n")
-    if error_accuracy>=best_error_info["best_error_performance"]["accuracy"]:
-        current_prompt = state["current_prompt"]
-        best_error_info = {
-        "best_error_prompt":current_prompt,
-        "best_error_report":state["report"],
-        "best_error_predictions":state["error_predictions"],
-        "best_error_performance":state["error_performance"],
-        "best_error_pre1l0":pre1l0,
-        "best_error_pre0l1":pre0l1
-        }
-        print(f"✅ 更新错误样本集最佳模型，准确率: {error_accuracy:.2%}")
+            "best_error_pre1l0":pre1l0,
+            "best_error_pre0l1":pre0l1
+            }
+            print(f"✅ 更新错误样本集最佳模型，准确率: {error_accuracy:.2%}")
+        else:
+            current_prompt = best_error_info["best_error_prompt"]
+            report = best_error_info["best_error_report"]
+            error_preds = best_error_info["best_error_predictions"]
+            error_performance = best_error_info["best_error_performance"]
+            pre0l1 = best_error_info["best_error_pre0l1"]
+            pre1l0 = best_error_info["best_error_pre1l0"]
+            print(f"⚠️ 错误样本集准确率未提升，当前: {error_accuracy:.2%}, 最佳: {best_error_info["best_error_performance"]["accuracy"]:.2%}")
+        # 更新错误子集最优模型
+        error_errors = [
+            sid for sid, pred in error_preds.items()
+            if pred['label'].lower() != error_dataset_map[sid]["ground_truth"].lower()
+        ]
+        # 判断是否达到阈值或最大迭代次数
+        error_iteration = state.get("error_iteration", 0)  # 错误聚焦迭代
+        if error_iteration>MAX_ITERATIONS or error_accuracy >= error_focus_threshold or len(error_errors) == 0:
+            print(f"✅ 错误样本集收敛，准确率: {error_accuracy:.2%} >= 阈值 {error_focus_threshold}")
+            print(f"🔍 进入全局验证阶段")
+            # 使用错误子集上的最佳模型
+            return {
+                "current_prompt": current_prompt,
+                "error_errors": error_errors,
+                "error_accuracy": error_accuracy,
+                "best_error_info": best_error_info,
+                "phase": "global_verify",
+                "error_iteration": 0,  # 重置错误迭代
+            }
+        else:
+            print(f"🔄 错误样本集未收敛，继续优化")
+            return {
+                "current_prompt":current_prompt,
+                "pre0l1":pre0l1,
+                "pre1l0":pre1l0,
+                "error_errors": error_errors,
+                "error_accuracy": error_accuracy,
+                "best_error_info":best_error_info,
+                "phase": "error_focus",
+                "error_iteration": error_iteration + 1,  # 增加错误迭代
+                "report":report
+            }
     else:
-        current_prompt = best_error_info["best_error_prompt"]
-        report = best_error_info["best_error_report"]
-        error_preds = best_error_info["best_error_predictions"]
-        error_performance = best_error_info["best_error_performance"]
-        pre0l1 = best_error_info["best_error_pre0l1"]
-        pre1l0 = best_error_info["best_error_pre1l0"]
-        print(f"⚠️ 错误样本集准确率未提升，当前: {error_accuracy:.2%}, 最佳: {best_error_info["best_error_performance"]["accuracy"]:.2%}")
-    # 更新错误子集最优模型
-    error_errors = [
-        sid for sid, pred in error_preds.items()
-        if pred['label'].lower() != error_dataset_map[sid]["ground_truth"].lower()
-    ]
-    # 判断是否达到阈值或最大迭代次数
-    error_iteration = state.get("error_iteration", 0)  # 错误聚焦迭代
-    if error_iteration>MAX_ITERATIONS or error_accuracy >= error_focus_threshold or len(error_errors) == 0:
-        print(f"✅ 错误样本集收敛，准确率: {error_accuracy:.2%} >= 阈值 {error_focus_threshold}")
-        print(f"🔍 进入全局验证阶段")
-        # 使用错误子集上的最佳模型
         return {
-            "current_prompt": current_prompt,
-            "error_errors": error_errors,
-            "error_accuracy": error_accuracy,
-            "best_error_info": best_error_info,
-            "phase": "global_verify",
-            "error_iteration": 0,  # 重置错误迭代
-        }
-    else:
-        print(f"🔄 错误样本集未收敛，继续优化")
-        return {
-            "current_prompt":current_prompt,
-            "pre0l1":pre0l1,
-            "pre1l0":pre1l0,
-            "error_errors": error_errors,
-            "error_accuracy": error_accuracy,
-            "best_error_info":best_error_info,
-            "phase": "error_focus",
-            "error_iteration": error_iteration + 1,  # 增加错误迭代
-            "report":report
-        }
-    # return {
-    #         "phase": "global_verify",
-    #         "error_iteration": 0,  # 重置错误迭代
-    #     }
+                "phase": "global_verify",
+                "error_iteration": 0,  # 重置错误迭代
+            }
 def error_summarizer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """错误分析agent - 基于固定的错误样本集"""
     current_phase = state.get("phase", "error_focus")
@@ -603,9 +620,11 @@ def error_summarizer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         sample = dataset_map[sid]
         pred_info = predictions[sid]
         len_h,len_n = len(pred_info['scores']["harmful_scores"]),len(pred_info['scores']["harmless_scores"])
+
+
         context = (
             f"[ID: {sid}]\n"
-            f"Meme Text: {sample['meme_text']}\n{sample['meme_content']}"
+            f"Meme Text: {sample['meme_text']}\n The description of the image:{sample['meme_content']}\n"
             f"The Meme was predicted: {pred_info['label']} \n"
             f"The Ground Truth of the meme is: {sample['ground_truth']}\n"
             f"The wrong LLM scores:\n"
@@ -652,12 +671,14 @@ b.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 
   }}
 }}
 """
-
         addition_cut_prompt = ""
         if len_h<4 or len_n<4:
             system_prompt = system_prompt_add_dimension
         else:
+
             addition_cut_prompt = "#现有操作：\n"+f"{reports[1]}\n+{reports[2]}\n""请在现有操作的基础上提出进一步建议:"
+            if not USE_LMCL:
+                addition_cut_prompt = ""
             system_prompt = f"""你是一位专门从事多模态大模型（LMM）指令工程与有害内容检测（Hateful Memes Detection）的顶级科研专家。
 {addition_cut_prompt}
 你的核心任务是基于以下信息：
@@ -717,7 +738,7 @@ b.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 
                 system_prompt=system_prompt,
                 messages=messages,
                 # meme_src=sample.get("meme_src", None),
-                temperature=0.5
+                temperature=1.0
             )
             prediction_saver.save(iteration,f"{error_iteration}_{sid}_advice",response)
         safe_append_markdown(RECORD_PATH, f"### 错误样本ID: {sid}\n**错误原因分析:** {response}\n")
@@ -735,6 +756,8 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     """prompt改进agent"""
     pre1l0 = state.get('pre1l0', [])
     pre0l1 = state.get('pre0l1', [])
+    random_pre1l0 = random.sample(pre1l0, min(len(pre1l0),2))
+    random_pre0l1 = random.sample(pre0l1, min(len(pre0l1),2))
     pre1l0_summary = state.get('pre1l0_summary',"")
     pre0l1_summary = state.get('pre0l1_summary',"")
     old_prompt = state["current_prompt"]
@@ -759,9 +782,11 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         if sid in predictions and sid in dataset_map:
             sample = dataset_map[sid]
             pred_info = predictions[sid]
+           
+
             context = (
                 f"[ID: {sid}]\n"
-                f"Meme Text: {sample['meme_text']}\n{sample['meme_content']}"
+                f"Meme Text: {sample['meme_text']}\n The description of the image:{sample['meme_content']}\n"
                 f"The Meme was predicted: {pred_info['label']} \n"
                 f"The Ground Truth of the meme is: {sample['ground_truth']}\n"
                 f"The wrong LLM scores:\n"
@@ -770,9 +795,9 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
                 f"其中，H维度（Harmful Scores）代表模型对模因有害性的判别分数，分数越高表明该模因越可能包含有害内容（如歧视、误导、恶意讽刺等）；N维度（Harmless Scores）则代表模型对模因无害性的判别分数，分数越高表明该模因越倾向于良性表达（如幽默调侃、正向共鸣、无害玩梗等）。\n" 
                 f"计算方法：Predict = Harmful if Aver(Harmful Scores) > Aver(Harmless Scores) else Harmless"
             )
-            if sid in pre1l0:
+            if sid in random_pre1l0:
                 pre1l0_context_list.append(context)
-            if sid in pre0l1:
+            if sid in random_pre0l1:
                 pre0l1_context_list.append(context)
             context_list.append(context)
     
@@ -783,78 +808,86 @@ def prompt_improver_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     additional_cut_prompt = "\n需要额外删除或者合并的维度"+reports[1]+f"\n{reports[2]}"
 # 已有历史经验误判案例
 # {pre1l0_context}
-    pre1l0_prompt = f"""你是一个专注于纠正将无害模因误判为有害的模因有害性判别经验总结记忆系统，旨在持续演进与优化判别知识库。
-请基于以下输入进行经验更新：
-各个专家提出的不同建议：
-{pre1l0_summary}\n
-{additional_cut_prompt}
-执行以下操作：
-综合各个专家的意见形成最核心的两条操作建议：
-##Note:
-1.建议类型：
-a.新增或删除或合并维度
-b.对某个维度的具体内容进行重写或改写
-c.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 当前打分偏向极端（H全高分，N全低分），需要特别强调独立打分)
+    if not USE_LMCL:
+        additional_cut_prompt = ''
+    if USE_DMEE:
+        pre1l0_prompt = f"""你是一个专注于纠正将无害模因误判为有害的模因有害性判别经验总结记忆系统，旨在持续演进与优化判别知识库。
+    请基于以下输入进行经验更新：
+    各个专家提出的不同建议：
+    {pre1l0_summary}\n
+    {additional_cut_prompt}
+    执行以下操作：
+    综合各个专家的意见形成最核心的两条操作建议：
+    ##Note:
+    1.建议类型：
+    a.新增或删除或合并维度
+    b.对某个维度的具体内容进行重写或改写
+    c.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 当前打分偏向极端（H全高分，N全低分），需要特别强调独立打分)
 
-2.维度数量限制：
-操作以后，最终H的维度和N的维度都保持在4-7之间
+    2.维度数量限制：
+    操作以后，最终H的维度和N的维度都保持在4-7之间
 
-3. 输出规范 (Output Format)
-将你的总结输出为一段内容（500字左右）：
-"""
-#--消除（如冗余、误导或与 Ground Truth 冲突的表述），
-# --合并（如语义重叠或可泛化的条目）。
-#--消除（如冗余、误导或与 Ground Truth 冲突的表述），
-# 已有历史经验误判案例
-# {pre0l1_context}
-    pre0l1_prompt = f"""你是一个专注于纠正将有害模因误判为无害的模因有害性判别经验总结记忆系统，旨在持续演进与优化判别知识库。
-请基于以下输入进行经验更新：
-各个专家提出的不同建议：
-{pre0l1_summary}
-{additional_cut_prompt}
-执行以下操作：
-综合各个专家的意见形成最核心的两条操作建议：
-##Note:
-1.建议类型：
-a.新增或删除或合并维度
-b.对某个维度的具体内容进行重写或改写
-c.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 当前打分偏向极端（H全高分，N全地方），需要特别强调独立打分)
+    3. 输出规范 (Output Format)
+    将你的总结输出为一段内容（500字左右）：
+    """
+    #--消除（如冗余、误导或与 Ground Truth 冲突的表述），
+    # --合并（如语义重叠或可泛化的条目）。
+    #--消除（如冗余、误导或与 Ground Truth 冲突的表述），
+    # 已有历史经验误判案例
+    # {pre0l1_context}
+        pre0l1_prompt = f"""你是一个专注于纠正将有害模因误判为无害的模因有害性判别经验总结记忆系统，旨在持续演进与优化判别知识库。
+    请基于以下输入进行经验更新：
+    各个专家提出的不同建议：
+    {pre0l1_summary}
+    {additional_cut_prompt}
+    执行以下操作：
+    综合各个专家的意见形成最核心的两条操作建议：
+    ##Note:
+    1.建议类型：
+    a.新增或删除或合并维度
+    b.对某个维度的具体内容进行重写或改写
+    c.额外建议 (在prompt维度评估以外需要特别强调的内容：例如 当前打分偏向极端（H全高分，N全地方），需要特别强调独立打分)
 
-2.维度数量限制：
-操作以后，最终H的维度和N的维度都保持在3-7之间
+    2.维度数量限制：
+    操作以后，最终H的维度和N的维度都保持在3-7之间
 
-3. 输出规范 (Output Format)
-将你的总结输出为一段内容（500字左右）：
-"""
-    print(f"\n{'='*60}")
-    print(f"记忆整合更新")
-    print(f"{'='*60}\n")
-    print(f"len(system_prompt):{len(pre1l0_prompt)}")
-    pre1l0_memory,pre0l1_memory = "",""
-    if pre1l0_context_list:
-        pre1l0_memory = prediction_saver.get(iteration,f"{error_iteration}_pre1l0_memory")
-        if pre1l0_memory == None:
-            pre1l0_memory = llm_tool.call_llm(
-                system_prompt=pre1l0_prompt,
-                messages=[{"role": "user", "content": "给出你的总结："}],
-                temperature=0.5
-            )
-            prediction_saver.save(iteration,f"{error_iteration}_pre1l0_memory",pre1l0_memory)
-        safe_append_markdown(RECORD_PATH, f"## pre1l0记忆更新\n**输出:**\n{pre1l0_memory}\n")
-    if pre0l1_context_list:
-        pre0l1_memory = prediction_saver.get(iteration,f"{error_iteration}_pre0l1_memory")
-        if pre0l1_memory == None:
-            pre0l1_memory = llm_tool.call_llm(
-                system_prompt=pre0l1_prompt,
-                messages=[{"role": "user", "content": "给出你的总结："}],
-                temperature=0.5
-            )
-            prediction_saver.save(iteration,f"{error_iteration}_pre0l1_memory",pre0l1_memory)
-        safe_append_markdown(RECORD_PATH, f"## pre0l1记忆更新\n**输出:**\n{pre0l1_memory}\n")
-    print(f"\n{'='*60}")
-    print(f"开始prompt改进")
-    print(f"{'='*60}\n")
-    
+    3. 输出规范 (Output Format)
+    将你的总结输出为一段内容（500字左右）：
+    """
+        print(f"\n{'='*60}")
+        print(f"记忆整合更新")
+        print(f"{'='*60}\n")
+        print(f"len(system_prompt):{len(pre1l0_prompt)}")
+        pre1l0_memory,pre0l1_memory = "",""
+        if pre1l0_context_list:
+            pre1l0_memory = prediction_saver.get(iteration,f"{error_iteration}_pre1l0_memory")
+            if pre1l0_memory == None:
+                pre1l0_memory = llm_tool.call_llm(
+                    system_prompt=pre1l0_prompt,
+                    messages=[{"role": "user", "content": "给出你的总结："}],
+                    temperature=1.0
+                )
+                prediction_saver.save(iteration,f"{error_iteration}_pre1l0_memory",pre1l0_memory)
+            safe_append_markdown(RECORD_PATH, f"## pre1l0记忆更新\n**输出:**\n{pre1l0_memory}\n")
+        if pre0l1_context_list:
+            pre0l1_memory = prediction_saver.get(iteration,f"{error_iteration}_pre0l1_memory")
+            if pre0l1_memory == None:
+                pre0l1_memory = llm_tool.call_llm(
+                    system_prompt=pre0l1_prompt,
+                    messages=[{"role": "user", "content": "给出你的总结："}],
+                    temperature=1.0
+                )
+                prediction_saver.save(iteration,f"{error_iteration}_pre0l1_memory",pre0l1_memory)
+            safe_append_markdown(RECORD_PATH, f"## pre0l1记忆更新\n**输出:**\n{pre0l1_memory}\n")
+        print(f"\n{'='*60}")
+        print(f"开始prompt改进")
+        print(f"{'='*60}\n")
+    else:
+        pre0l1_memory = pre0l1_summary
+        pre1l0_memory = pre1l0_summary
+    if not USE_ERROR_REF:
+        pre0l1_memory = "Misclassified samples:\n"+pre0l1_context
+        pre1l0_memory = "Misclassified samples:\n"+pre1l0_context
     # 第二步：生成新的prompt
     system_prompt = """
 You are a Senior Prompt Optimization Engineer specializing in Harmful Meme Detection.
@@ -899,31 +932,20 @@ You will receive:
 """
     #   Specific error example：
     #   #####\n{combined_context}\n#####
-    if USE_LMCL:
-        if USE_DMEE:
-            messages1 = [{"role": "user", 
-                       "content": f"""Original prompt:
-    #####\n{old_prompt}\n#####
-    **False Positives (Harmless -> Harmful) Error Analysis Memory **:
-    #####\n{pre1l0_memory}\n#####
-    **False Negatives (Harmful -> Harmless) Error Analysis Memory** :
-    #####\n{pre0l1_memory}\n#####
-    OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."""}]
-        else:
-            messages1 = [{"role": "user", 
-                       "content": f"""Original prompt:
-    #####\n{old_prompt}\n#####
-    ranking of importance scores:
-    #####\n{feature_importance}\n#####
-    OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."""}]
-    else:
+    if USE_DMEE:
         messages1 = [{"role": "user", 
                    "content": f"""Original prompt:
 #####\n{old_prompt}\n#####
-Suggestions for rectifying the misjudgment of harmless memes as harmful:
+**False Positives (Harmless -> Harmful) Error Analysis Memory **:
 #####\n{pre1l0_memory}\n#####
-Suggestions for rectifying the misjudgment of harmful memes as harmless:
+**False Negatives (Harmful -> Harmless) Error Analysis Memory** :
 #####\n{pre0l1_memory}\n#####
+OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."""}]
+    else:
+        messages1 = [{"role": "user", 
+                   "content": f"""Original prompt:
+analyse:\n\n{pre1l0_memory}\n\n{pre0l1_memory}
+#####\n{old_prompt}\n#####
 OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."""}]
     
     system_prompt = system_prompt
@@ -932,7 +954,7 @@ OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."
         new_prompt = llm_tool.call_llm(
             system_prompt=system_prompt,
             messages=messages1,
-            temperature=0.5
+            temperature=1.0
         )
         prediction_saver.save(iteration,f"{error_iteration}_new_prompt",new_prompt)
     # para = extract_dict_from_string(new_prompt)
@@ -943,13 +965,13 @@ OUTPUT ONLY THE NEW *REWRITE* PROMPT TEXT. NO EXPLANATION. NO JSON. NO EXAMPLE."
     return {
 
         "current_prompt": new_prompt,
-        "prompt_history": state.get("prompt_history", []) + [{
-            'errors': list(state.get("error_errors", [])),
-            'error_accuracy': state.get("error_accuracy", 0),
-            'error_summary': error_summary,
-            "new_prompt": new_prompt,
-            "new_code": state["current_code"]
-        }],
+        # "prompt_history": state.get("prompt_history", []) + [{
+        #     'errors': list(state.get("error_errors", [])),
+        #     'error_accuracy': state.get("error_accuracy", 0),
+        #     'error_summary': error_summary,
+        #     "new_prompt": new_prompt,
+        #     "new_code": state["current_code"]
+        # }],
         "pre1l0": [],  # 重置误判统计
         "pre0l1": [],
         "pre1l0_memory":pre1l0_memory,

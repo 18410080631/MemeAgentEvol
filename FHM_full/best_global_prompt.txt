@@ -1,0 +1,80 @@
+### Comprehensive Meme Evaluation for Harmfulness
+
+A meme is classified as harmful if it meets one or more of the following criteria:
+
+*H1*: **Targeting of Protected Groups**:  
+The meme must explicitly or implicitly attack individuals based on characteristics such as:  
+(1) Race, ethnicity, or nationality  
+(2) Immigration status  
+(3) Religion or beliefs  
+(4) Caste  
+(5) Gender identity or sexual orientation  
+(6) Disability or health conditions  
+Evaluate whether the content expresses derogatory sentiments or threats towards these groups, particularly in social or familial contexts.
+
+*H2*: **Symbolic and Linguistic Offensiveness**:  
+Assess the meme for harmful attributes reflecting agenda-driven intent, including:  
+(1) Dehumanization: Portraying individuals as inanimate or non-human.  
+(2) Inferiority Claims: Suggesting a group is lesser, untrustworthy, or dangerous.  
+(3) Exclusionary Tactics: Promoting the isolation of specific groups.  
+(4) Trivialization: Making light of violence or discrimination against marginalized groups.  
+(5) Ridicule: Openly mocking cultural, religious, or gender identities.  
+Ensure a nuanced examination of text-image interactions; benign imagery should not be misinterpreted as harmful.
+
+*H3*: **Cultural and Contextual Understanding**:  
+(1) Evaluate memes in their cultural and social context to discern humor or sarcasm accurately.  
+(2) Identify comedic elements that may be misinterpreted as harmful outside their cultural milieu.  
+(3) Assess how humor and social interactions convey meanings that do not equate to an attack on protected groups.
+
+*H4*: **Identification of Negative Intent in Text-Image Interaction**:  
+(1) Analyze how the combination of text and imagery may create negative implications not apparent when evaluated separately.  
+(2) Determine if replacing elements with neutral alternatives reduces perceived harm.  
+(3) Understand instances where altering one component still retains harmful implications.
+
+*H5*: **Opposition to Controversial Topics**:  
+Evaluate whether the meme actively resists forms of attack or hate speech, focusing on its stance and societal opposition to harmful rhetoric.
+
+*H6*: **Humor and Cultural Context Understanding**:  
+Assess the meme for humor elements and cultural context to avoid misclassifying light-hearted content as harmful. Analyze how the meme conveys meaning in specific social settings.
+
+A meme is categorized as harmless if it meets the following criteria:
+
+*N1*: **Lack of Targeted Attack**:  
+There is no evidence of derogatory content aimed at any protected characteristics.
+
+*N2*: **Critique Without Harm**:  
+(1) Provides valid criticism of public figures unrelated to protected characteristics.  
+(2) Dismisses hate speech against extremists and similar figures as non-harmful.
+
+*N3*: **Benign Intent**:  
+Text and images can independently exist as non-harmful, possibly implying mockery without crossing into harmful territory.
+
+### Important Instructions:  
+1. Avoid classification based solely on keywords; deepen analysis in the broader context.  
+2. Evaluate implied meanings beyond literal interpretations.  
+3. Ensure combined implications from text and images are thoroughly assessed.  
+4. Determine if a reasonable person would perceive it as an attack on protected groups.
+
+### Scoring Protocol (Mandatory)  
+Evaluate the meme using all criteria, scoring from **1 to 9** for each dimension (1 = completely absent, 9 = clearly present).  
+
+- Use the full scoring range; avoid extreme scores.  
+- A high score in H1 does not necessitate a high score in H2; evaluate dimensions independently.  
+- Maintain rigorous focus on accurately identifying the harmful or harmless nature of the meme through comprehensive evaluation.
+
+{
+  "harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int,
+    "H4": int,
+    "H5": int,
+    "H6": int
+  },
+  "harmless_scores": {
+    "N1": int,
+    "N2": int,
+    "N3": int
+  },
+  "reasoning": "Outline the primary reasoning behind your scoring decisions."
+}

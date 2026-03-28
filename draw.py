@@ -3,154 +3,102 @@ import os
 import numpy as np
 import json
 import os
-def draw_evolution():
-    # --- 数据准备 ---
-    datasets = {
-        'HARM': {
-            'rounds': ['R1', 'R2', 'R3', 'R4'],
-            'acc': [0.70, 0.775, 0.75, 0.90],
-            'f1': [0.57, 0.73, 0.64, 0.87],
-            'dims': [6, 10, 13, 13]
-        },
-        'FHM': {
-            'rounds': ['R1', 'R2', 'R3', 'R4', 'R5'],
-            'acc': [0.825, 0.825, 0.825, 0.825, 0.85],
-            'f1': [0.79, 0.77, 0.77, 0.77, 0.81],
-            'dims': [7, 8, 9, 10, 10]
-        },
-        'MAMI': {
-            'rounds': ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'],
-            'acc': [0.85, 0.85, 0.85, 0.82, 0.85, 0.90],
-            'f1': [0.86, 0.86, 0.86, 0.84, 0.86, 0.91],
-            'dims': [6, 8, 9, 10, 11, 12]
-        }
-    }
-
-    # --- 设置学术风格 ---
-    plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.serif'] = ['Times New Roman']
-
-    # 调整画布比例：宽度15英寸，高度5英寸。这个比例最适合Word
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    colors = {'acc': '#1F4E79', 'f1': '#C00000', 'dim': '#E1E1E1'}
-
-    for i, (name, data) in enumerate(datasets.items()):
-        ax1 = axes[i]
-        x = data['rounds']
-
-        # 绘制维度背景（右轴）
-        ax2 = ax1.twinx()
-        bars = ax2.bar(x, data['dims'], color=colors['dim'], alpha=0.6, width=0.4, label='Dimensions', zorder=1)
-        ax2.set_ylim(0, 16)
-        ax2.tick_params(axis='y', labelsize=9, labelcolor='#777777')
-        if i == 2:
-            ax2.set_ylabel('Number of Dimensions', fontsize=10)
-
-        # 绘制性能指标（左轴）
-        line1, = ax1.plot(x, data['acc'], marker='s', ms=5, lw=1.5, color=colors['acc'], label='Accuracy', zorder=3)
-        line2, = ax1.plot(x, data['f1'], marker='o', ms=5, lw=1.5, ls='--', color=colors['f1'], label='Macro-F1', zorder=3)
-
-        ax1.set_title(name, fontsize=12, fontweight='bold', pad=12)
-        ax1.set_xlabel('Rounds', fontsize=10)
-        ax1.set_ylim(0.5, 1.0)
-        ax1.tick_params(axis='both', labelsize=9)
-        if i == 0:
-            ax1.set_ylabel('Performance Metrics', fontsize=10)
-        ax1.grid(True, ls=':', alpha=0.4, zorder=0)
-
-    # --- 核心改进：解决重叠和间距问题 ---
-    # 1. 调整子图间的水平间距 wspace，预留足够空间给y轴标签
-    plt.subplots_adjust(wspace=0.35, top=0.85, bottom=0.15, left=0.08, right=0.92)
-
-    # 2. 统一图例
-    lines = [line1, line2, bars]
-    labels = [l.get_label() for l in lines]
-    fig.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, 0.98), 
-               ncol=3, frameon=False, fontsize=10)
-
-    # 3. 保存设置：使用 bbox_inches='tight' 自动裁剪空白，但保持内容比例
-    plt.savefig('evolution_optimized.png', dpi=300, bbox_inches='tight')
-
+from config import DATASET_NAME
 import matplotlib.pyplot as plt
 
+import json
+import matplotlib.pyplot as plt
+import os
+
+import json
+import matplotlib.pyplot as plt
+import os
+
 def draw_individual_evolution():
-    # --- 数据准备 ---
-    datasets = {
-        'HARM': {
-            'rounds': ['R1', 'R2', 'R3', 'R4'],
-            'acc': [0.70, 0.775, 0.75, 0.90],
-            'f1': [0.57, 0.73, 0.64, 0.87],
-            'dims': [6, 10, 13, 13]
-        },
-        'FHM': {
-            'rounds': ['R1', 'R2', 'R3', 'R4', 'R5'],
-            'acc': [0.825, 0.825, 0.825, 0.825, 0.85],
-            'f1': [0.79, 0.77, 0.77, 0.77, 0.81],
-            'dims': [7, 8, 9, 10, 10]
-        },
-        'MAMI': {
-            'rounds': ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'],
-            'acc': [0.85, 0.85, 0.85, 0.82, 0.85, 0.90],
-            'f1': [0.86, 0.86, 0.86, 0.84, 0.86, 0.91],
-            'dims': [6, 8, 9, 10, 11, 12]
-        }
+    # --- 1. 数据配置 ---
+    # 定义实验变体标签及其对应的文件夹后缀
+    variants = {
+        'Full Model': 'full',
+        'w/o MEE': 'wo_MEE',
+        'w/o RRM': 'wo_RRM'
+    }
+    dataset_names = ['HARM', 'FHM', 'MAMI']
+    
+    # 学术配色方案（高对比度）
+    styles = {
+        'Full Model': {'color': '#1F4E79', 'marker': 'o', 'ls': '-'},   # 深蓝 实线
+        'w/o MEE':    {'color': '#C00000', 'marker': 's', 'ls': '--'},  # 深红 虚线
+        'w/o RRM':    {'color': '#008000', 'marker': '^', 'ls': '-.'}  # 绿色 点划线
     }
 
-    # --- 学术风格设置 ---
+    # --- 2. 字体与学术风格设置 ---
     plt.rcParams['font.family'] = 'serif'
     plt.rcParams['font.serif'] = ['Times New Roman']
-    plt.rcParams['mathtext.fontset'] = 'stix'  # 使数学符号更接近Times风格
+    plt.rcParams['mathtext.fontset'] = 'stix'
     
-    # 颜色与样式配置 (保持专业感)
-    color_acc = '#1F4E79' # 黑色实线
-    color_f1 = '#C00000'  # 深灰色虚线
-    color_dim = '#E1E1E1' # 浅灰色柱状图
-    
-    # 循环生成每一张图
-    for name, data in datasets.items():
-        # 设置单张图大小，通常4-5英寸宽比较适合Word单栏或半栏嵌入
-        fig, ax1 = plt.subplots(figsize=(5, 4))
+    # --- 3. 循环为每个数据集绘图 ---
+    for ds_name in dataset_names:
+        # 设置适合论文发表的尺寸
+        fig, ax = plt.subplots(figsize=(5.5, 4.2))
         
-        x = data['rounds']
-        
-       
+        # 遍历读取并绘制每个变体的 Accuracy
+        for label, suffix in variants.items():
+            # 路径拼接，例如: HARM_full/result.json
+            file_path = f"{ds_name}_{suffix}/result.json"
+            
+            if not os.path.exists(file_path):
+                print(f"跳过: 未找到路径 {file_path}")
+                continue
+                
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # 提取数据
+            x = data['rounds']
+            y = data['acc']
+            
+            # 绘制 Accuracy 演化曲线
+            ax.plot(x, y, 
+                    label=label,
+                    color=styles[label]['color'],
+                    marker=styles[label]['marker'],
+                    ls=styles[label]['ls'],
+                    lw=1.6, 
+                    mfc='white', # 标志内部填充白色，提升学术质感
+                    ms=6,
+                    zorder=3)
 
-        # 1. 绘制性能指标 (左轴)
-        # 使用不同标记和线型以增加区分度 (自明性)
-        line1, = ax1.plot(x, data['acc'], marker='s', mfc='none', mec=color_acc, 
-                         lw=1.2, color=color_acc, label='Accuracy', zorder=3)
-        line2, = ax1.plot(x, data['f1'], marker='^', mfc='none', mec=color_f1, 
-                         lw=1.2, ls='--', color=color_f1, label='Macro-F1', zorder=3)
-        # 2. 绘制维度柱状图 (右轴) - 对应“简写函数图”中的辅助信息
-        ax2 = ax1.twinx()
-        bars = ax2.bar(x, data['dims'], color=color_dim, alpha=0.7, width=0.5, label='Dimensions', zorder=1)
-        ax2.set_ylim(0, 16)
-        # 标注格式：物理量(斜体)/单位(正体)
-        ax2.set_ylabel(r'$D$/unit', fontsize=10.5) 
-        ax2.tick_params(axis='y', labelsize=10.5)
-        # 3. 坐标轴及标签设置 (五号字对应10.5pt)
-        ax1.set_xlabel('Rounds', fontsize=10.5)
-        # 使用LaTeX渲染斜体物理量符号
-        ax1.set_ylabel(r'$Value$', fontsize=10.5) 
-        ax1.set_ylim(0.5, 1.0)
-        ax1.tick_params(axis='both', labelsize=10.5)
+        # --- 4. 坐标轴及细节微调 ---
+        ax.set_xlabel('Evolutionary Rounds', fontsize=11)
+        ax.set_ylabel('Accuracy', fontsize=11)
         
-        # 4. 辅助线
-        ax1.grid(True, ls=':', alpha=0.5, zorder=0)
+        # 开启网格，使用极淡的虚线
+        ax.grid(True, ls=':', alpha=0.5, zorder=0)
+        
+        # 根据实际数据微调 y 轴范围，例如 0.6 到 0.9
+        # ax.set_ylim(0.6, 0.9) 
+        
+        ax.tick_params(axis='both', labelsize=10)
+        
+        # 图例设置：无阴影、黑边、右下角
+        ax.legend(loc='lower right', fontsize=10, frameon=True, 
+                  edgecolor='black', fancybox=False)
 
-        # 5. 图例 - 放在图内上方，确保自明性
-        lines = [line1, line2, bars]
-        labels = [l.get_label() for l in lines]
-        ax1.legend(lines, labels, loc='upper left', fontsize=9, frameon=True, edgecolor='black', fancybox=False)
-        ax1.set_zorder(ax2.get_zorder() + 1) # 让ax1比ax2高一层
-        ax1.patch.set_visible(False)
-        # 6. 布局调整与保存
+        # --- 5. 布局优化与保存 ---
         plt.tight_layout()
-        filename = f'evolution_{name}.png'
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        print(f"已保存: {filename}")
+        save_dir = "evolution_pics"
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 文件名示例: accuracy_evolution_HARM.png
+        save_path = os.path.join(save_dir, f'accuracy_evolution_{ds_name}.png')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"已成功保存对比图: {save_path}")
         plt.close()
+
+# 执行调用
+
+# 执行
+# draw_individual_evolution()
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -330,6 +278,85 @@ def draw_individual_radar():
         plt.close()
 
 import matplotlib.pyplot as plt
+import os
+
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+
+def draw_insight_size_impact():
+    # --- 1. 数据配置 ---
+    # 包含了 0 (Baseline) 以及 10, 20, 40, 60
+    x_sizes = [0, 10, 20, 40, 60]
+    
+    # 你的真实/模拟数据
+    data = {
+        'FHM':  [0.648, 0.664, 0.660, 0.696, 0.682],
+        'HARM': [0.692, 0.711, 0.720, 0.741, 0.750], 
+        'MAMI': [0.724, 0.728, 0.755, 0.795, 0.797]
+    }
+
+    # 学术配色与线型
+    styles = {
+        'FHM':  {'color': '#1F4E79', 'marker': 'o', 'ls': '-'},   
+        'HARM': {'color': '#C00000', 'marker': 's', 'ls': '--'},  
+        'MAMI': {'color': '#008000', 'marker': '^', 'ls': '-.'}   
+    }
+
+    # --- 2. 字体与风格设置 ---
+    plt.rcParams['font.family'] = 'serif'
+    plt.rcParams['font.serif'] = ['Times New Roman']
+    plt.rcParams['mathtext.fontset'] = 'stix'
+    
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    
+    # --- 3. 绘图 ---
+    for ds_name, y_values in data.items():
+        ax.plot(x_sizes, y_values, 
+                label=ds_name,
+                color=styles[ds_name]['color'],
+                marker=styles[ds_name]['marker'],
+                ls=styles[ds_name]['ls'],
+                lw=1.8, 
+                mfc='white', 
+                ms=7,
+                zorder=3)
+
+    # --- 4. 坐标轴及范围微调 ---
+    ax.set_xlabel('Size of Insight Set', fontsize=12)
+    ax.set_ylabel('Accuracy', fontsize=12)
+    
+    ax.set_xticks(x_sizes)
+    
+    # --- 关键调整区 ---
+    # 根据你的数据：最小值 0.648, 最大值 0.795
+    # 设置 y 轴从 0.62 开始到 0.82 结束，给顶部留出一点图例空间
+    ax.set_ylim(0.62, 0.82) 
+    
+    # 设置更精细的刻度，每 0.02 一个刻度
+    ax.set_yticks(np.arange(0.62, 0.83, 0.02))
+    # ------------------
+
+    ax.grid(True, ls=':', alpha=0.5, zorder=0)
+    ax.tick_params(axis='both', labelsize=11)
+    
+    ax.legend(loc='lower right', fontsize=11, frameon=True, 
+              edgecolor='black', fancybox=False)
+
+    # --- 5. 布局优化与保存 ---
+    plt.tight_layout()
+    save_dir = "evolution_pics"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    save_path = os.path.join(save_dir, 'insight_size_impact_comparison.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    print(f"图像已保存至: {save_path}")
+    plt.show()
+
+    # plt.show()
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
@@ -376,7 +403,8 @@ def draw_dim_importance():
     plt.tight_layout()
     plt.savefig('Feature_Importance_Comparison.png')
     # plt.show()
-draw_dim_importance()
+# draw_dim_importance()
 # --- 配置三个数据集的维度信息 ---
 # draw_individual_radar()
 # draw_individual_evolution()
+draw_insight_size_impact()

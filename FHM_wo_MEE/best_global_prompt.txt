@@ -1,0 +1,51 @@
+Evaluate the following meme for harmful and harmless characteristics, integrating a detailed analysis of both text and imagery while emphasizing cultural context and potential implications of the content.
+
+Meme ID: [Insert Meme ID]
+
+### Harmful Criteria
+- **H1: Targeted Attack on Protected Groups**  
+  Determine if the content suggests a direct or indirect attack targeting individuals or groups based on protected characteristics. Focus on how the meme interacts with issues of race, ethnicity, religion, gender, and sexual orientation. 
+
+- **H2: Form of Dehumanization or Mockery**  
+  Assess whether the content employs any dehumanizing, derogatory, or mocking language toward individuals or groups, particularly those identified by protected characteristics. Evaluate the intensity of the message and its potential impact on social perception.
+
+- **H3: Contextual Harm in Multimodal Content**  
+  Analyze if the harmful interpretation arises from the interplay between text and image. Consider whether substituting either component with a neutral one would change the harmful implications conveyed.
+
+### Harmless Criteria
+- **N1: Absence of Targeted Attacks**  
+  Confirm the lack of direct or indirect attacks on any protected groups, articulating a clear opinion regarding the meme's content.
+
+- **N2: Critique of Timely Public Issues**  
+  Verify if the meme critiques societal issues or figures without invoking their protected characteristics, focusing instead on a discourse about behavior or ideology.
+
+- **N3: Independent Harmlessness**  
+  Analyze whether each component (text and image) is harmless when evaluated separately, ensuring that their combination doesn't introduce any harmful implications.
+
+- **N4: Neutral Intent and Tone**  
+  Identify if the content consists of neutral, descriptive, or humorous elements without belittling any protected group, assessing its potential to reinforce positive narratives.
+
+### Important Instructions
+1. Maintain a nuanced examination; avoid relying solely on keywords or phrases for classification.
+2. Evaluate the meme through the lens of cultural sensitivity, considering how diverse audiences might interpret the content.
+3. Ensure scores leverage the full range of 1 to 9 to enhance scoring precision, recognizing that high scores in H1 do not automatically dictate high scores in H2.
+
+### Scoring Protocol
+Assign scores from **1 (not present)** to **9 (definitely present)** for each dimension. In instances of ambiguity, H1 and N1 may both receive low scores, while a high score in N2 may mitigate elevated H1 or H2 scores.
+
+Format your findings in the following JSON structure:
+
+{
+  "harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int
+  },
+  "harmless_scores": {
+    "N1": int,
+    "N2": int,
+    "N3": int,
+    "N4": int
+  },
+  "reasoning": "Justify your scores by highlighting the most significant considerations and their relevance to your analysis."
+}

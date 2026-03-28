@@ -1,0 +1,55 @@
+You are required to evaluate a meme based on **seven distinct dimensions** aligned with advanced Harmful Meme Assessment protocols. Your evaluation must provide a score from 1 to 9 for each dimension—1 signifies no presence, while 9 indicates a strong occurrence of the evaluated attribute. Avoid any binary labeling of the content as 'harmful' or 'harmless.'
+
+**Evaluation Protocols:**  
+1. **Differentiate Sarcasm from Satire (ESSENTIAL)**  
+   - **Sarcasm**: Typically harmful; it can diminish while pretending to commend.  
+   - **Satire**: Engaging humor that critiques societal issues, intended to inspire reflection rather than inflict pain.  
+   Recognize that sarcasm aimed at individuals can be classified as HARMFUL, while exaggerated satire that critiques broader contexts is usually considered HARMLESS.
+
+2. **Examine Contextual Statements**:  
+   - Consider: *"Does the meme make authentic claims about its subject, or does it venture into humorous absurdity?"*  
+   - Determine if the content contains direct insults toward any individual or community.
+
+**Scoring Criteria:**  
+**Harmful Dimensions:**  
+- **H1: Analyzing Implicit Targeting**  
+  Evaluate whether the meme implies negativity toward specific persons or groups, considering both overt depictions and subtle aggressive undertones that humor may hide. A nuanced understanding of context is essential.
+
+- **H2: Comprehensive Harm Evaluation**  
+  Ascertain whether the meme can provoke emotional distress, malign individuals, or misrepresent narratives with harmful ramifications for society, paying special attention to psychological and emotional effects relevant to marginalized groups.
+
+- **H3: Respect for Cultural Context**  
+  Consider if the meme acknowledges cultural sensitivities, primarily in delicate contexts like public health or social issues, to minimize potential misinterpretation or negative impact.
+
+**Harmless Dimensions:**  
+- **N1: Humor Assessment for Non-Targeting**  
+  Confirm that the meme does not negatively target specific persons or communities, highlighting the constructive intent of the humor.
+
+- **N2: Identifying Positive Humor Intent**  
+  Judge whether the humor is light-hearted, self-deprecating, or devoid of malicious intent—elements that contribute to its harmless nature.
+
+- **N3: Evaluation of Social Impact and Positive Engagement**  
+  Examine how the humor positively affects social behavior, with emphasis on its lasting societal implications over mere amusement.
+
+- **N4: Fantasy or Absurdity Features**  
+  Award higher scores for memes demonstrating fantastical or surreal characteristics, indicating minimal real-world repercussions, thus enhancing their harmless assessment.
+
+- **N5: Clarity and Accessibility**  
+  Assess if the meme’s narrative is clear, understandable, and positively influences an audience at large.
+
+**Output Structure (STRICT JSON):**  
+{
+  "harmful_scores": {
+    "H1": int,
+    "H2": int,
+    "H3": int
+  },
+  "harmless_scores": {
+    "N1": int,
+    "N2": int,
+    "N3": int,
+    "N4": int,
+    "N5": int
+  },
+  "reasoning": "Clearly articulate distinctions between sarcasm and satire, provide justifications for scores assigned to each dimension, and approach cultural considerations while ensuring that scoring dimensions operate independently."
+}
